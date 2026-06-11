@@ -6,12 +6,15 @@ import io.mikoshift.natsu.domain.model.DictionaryInstallState
 import io.mikoshift.natsu.domain.model.InstalledDictionary
 import io.mikoshift.natsu.domain.repository.DictionaryManagerRepository
 import io.mikoshift.natsu.domain.repository.PriorityDirection
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.merge
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -25,39 +28,47 @@ class DictionaryManagerRepositoryImpl(
 ) : DictionaryManagerRepository {
 
     private val appContext = context.applicationContext
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val downloadMutex = Mutex()
     private val downloadProgress = MutableStateFlow<Map<String, Float>>(emptyMap())
     private val downloadingIds = MutableStateFlow<Set<String>>(emptySet())
+    private val installedRecords = MutableStateFlow<Map<String, DictionaryRecord>>(emptyMap())
     private var cachedCatalog: List<DictionaryCatalogItem>? = null
 
-    override suspend fun getCatalog(): List<DictionaryCatalogItem> {
+    init {
+        localStore.observeChanges()
+            .onEach { refreshInstalledRecords() }
+            .launchIn(scope)
+    }
+
+    override suspend fun getCatalog(): List<DictionaryCatalogItem> = getCatalogSync()
+
+    override fun observeDictionaries(): Flow<List<InstalledDictionary>> =
+        combine(
+            downloadProgress,
+            downloadingIds,
+            installedRecords,
+        ) { progress, downloading, installed ->
+            buildDictionaryList(
+                progress = progress,
+                downloading = downloading,
+                installed = installed,
+            )
+        }.onStart {
+            refreshInstalledRecords()
+        }
+
+    private fun getCatalogSync(): List<DictionaryCatalogItem> {
         cachedCatalog?.let { return it }
         return catalogLoader.loadCatalog().also { cachedCatalog = it }
     }
 
-    override fun observeDictionaries(): Flow<List<InstalledDictionary>> =
-        merge(
-            flowOf(Unit),
-            localStore.observeChanges(),
-            downloadProgress,
-            downloadingIds,
-        ).flatMapLatest {
-            flow {
-                emit(
-                    buildDictionaryList(
-                        progress = downloadProgress.value,
-                        downloading = downloadingIds.value,
-                    ),
-                )
-            }
-        }
-
-    private suspend fun buildDictionaryList(
+    private fun buildDictionaryList(
         progress: Map<String, Float>,
         downloading: Set<String>,
+        installed: Map<String, DictionaryRecord>,
     ): List<InstalledDictionary> {
-        val catalog = getCatalog()
-        val installed = localStore.getAllDictionaries().associateBy { it.id }
+        val catalog = getCatalogSync()
         return catalog.map { item ->
             val record = installed[item.id]
             val isDownloading = item.id in downloading
@@ -101,16 +112,31 @@ class DictionaryManagerRepositoryImpl(
 
             val cacheDir = File(appContext.cacheDir, "dictionary_downloads").apply { mkdirs() }
             val zipFile = File(cacheDir, "$catalogId.zip")
+            val progressTracker = DownloadProgressTracker()
 
             try {
-                downloadManager.download(catalogItem.downloadUrl, zipFile) { progress ->
-                    downloadProgress.value = downloadProgress.value + (catalogId to progress)
+                downloadManager.download(catalogItem.downloadUrl, zipFile) { rawProgress ->
+                    progressTracker.onDownloadProgress(rawProgress) { mapped ->
+                        downloadProgress.value = downloadProgress.value + (catalogId to mapped)
+                    }
                 }.getOrThrow()
 
-                downloadProgress.value = downloadProgress.value + (catalogId to 0.99f)
+                progressTracker.onDownloadComplete { mapped ->
+                    downloadProgress.value = downloadProgress.value + (catalogId to mapped)
+                }
+
                 var index: DictionaryArchiveIndex? = null
                 localStore.replaceTermsStreaming(catalogId) { insertBatch ->
-                    index = importer.importZip(zipFile, catalogId, insertBatch)
+                    index = importer.importZip(
+                        zipFile = zipFile,
+                        catalogId = catalogId,
+                        onBatch = insertBatch,
+                        onImportProgress = { filesProcessed, totalFiles ->
+                            progressTracker.onImportProgress(filesProcessed, totalFiles) { mapped ->
+                                downloadProgress.value = downloadProgress.value + (catalogId to mapped)
+                            }
+                        },
+                    )
                 }
                 val dictionaryIndex = index ?: error("Dictionary index missing after import")
                 val priority = localStore.nextPriority()
@@ -160,4 +186,50 @@ class DictionaryManagerRepositoryImpl(
 
     override suspend fun hasEnabledDictionaries(): Boolean =
         localStore.hasEnabledDictionaries()
+
+    private suspend fun refreshInstalledRecords() {
+        installedRecords.value = localStore.getAllDictionaries().associateBy { it.id }
+    }
+
+    private class DownloadProgressTracker {
+        private var lastEmitAtMs = 0L
+        private var lastEmittedProgress = -1f
+
+        fun onDownloadProgress(rawProgress: Float, emit: (Float) -> Unit) {
+            val mapped = rawProgress * DOWNLOAD_WEIGHT
+            maybeEmit(mapped, force = rawProgress >= 1f, emit = emit)
+        }
+
+        fun onDownloadComplete(emit: (Float) -> Unit) {
+            maybeEmit(DOWNLOAD_WEIGHT, force = true, emit = emit)
+        }
+
+        fun onImportProgress(filesProcessed: Int, totalFiles: Int, emit: (Float) -> Unit) {
+            val fraction = if (totalFiles > 0) filesProcessed.toFloat() / totalFiles.toFloat() else 1f
+            val mapped = DOWNLOAD_WEIGHT + IMPORT_WEIGHT * fraction
+            maybeEmit(mapped, force = filesProcessed >= totalFiles, emit = emit)
+        }
+
+        private fun maybeEmit(mapped: Float, force: Boolean, emit: (Float) -> Unit) {
+            val clamped = mapped.coerceIn(0f, 1f)
+            val now = System.currentTimeMillis()
+            val delta = kotlin.math.abs(clamped - lastEmittedProgress)
+            if (
+                force ||
+                now - lastEmitAtMs >= THROTTLE_MS ||
+                delta >= MIN_PROGRESS_DELTA
+            ) {
+                lastEmitAtMs = now
+                lastEmittedProgress = clamped
+                emit(clamped)
+            }
+        }
+
+        companion object {
+            private const val DOWNLOAD_WEIGHT = 0.4f
+            private const val IMPORT_WEIGHT = 0.6f
+            private const val THROTTLE_MS = 250L
+            private const val MIN_PROGRESS_DELTA = 0.01f
+        }
+    }
 }

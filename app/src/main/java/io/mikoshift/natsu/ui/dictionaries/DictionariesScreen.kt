@@ -164,7 +164,7 @@ private fun DictionaryCard(
                     }
                 }
                 DictionaryInstallState.Downloading -> {
-                    val isInstalling = dictionary.downloadProgress >= 0.99f
+                    val isInstalling = dictionary.downloadProgress >= 0.4f
                     Text(
                         stringResource(
                             if (isInstalling) R.string.dictionary_installing
@@ -175,12 +175,10 @@ private fun DictionaryCard(
                         progress = { dictionary.downloadProgress.coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    if (!isInstalling) {
-                        Text(
-                            text = "${(dictionary.downloadProgress * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
+                    Text(
+                        text = "${(dictionary.downloadProgress * 100).toInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
                 }
                 DictionaryInstallState.Installed -> {
                     dictionary.title?.let { title ->

@@ -10,6 +10,7 @@ import java.io.FileInputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
+import java.util.zip.ZipFile
 import java.util.zip.ZipInputStream
 
 data class DictionaryArchiveIndex(
@@ -22,7 +23,10 @@ class TermBankImporter {
         zipFile: File,
         catalogId: String,
         onBatch: suspend (List<TermRecord>) -> Unit,
+        onImportProgress: (filesProcessed: Int, totalFiles: Int) -> Unit = { _, _ -> },
     ): DictionaryArchiveIndex {
+        val totalTermBankFiles = countTermBankFiles(zipFile)
+        var filesProcessed = 0
         var index: DictionaryArchiveIndex? = null
         ZipInputStream(FileInputStream(zipFile)).use { zipInput ->
             while (true) {
@@ -38,6 +42,8 @@ class TermBankImporter {
                     }
                     entryName.startsWith("term_bank") && entryName.endsWith(".json") -> {
                         parseTermBankStream(zipInput, catalogId, onBatch)
+                        filesProcessed++
+                        onImportProgress(filesProcessed, totalTermBankFiles)
                     }
                     else -> Unit
                 }
@@ -46,6 +52,16 @@ class TermBankImporter {
         }
         return index ?: error("index.json not found in dictionary archive")
     }
+
+    private fun countTermBankFiles(zipFile: File): Int =
+        ZipFile(zipFile).use { zip ->
+            zip.entries().asSequence().count { entry ->
+                !entry.isDirectory &&
+                    entry.name.substringAfterLast('/').let { name ->
+                        name.startsWith("term_bank") && name.endsWith(".json")
+                    }
+            }.coerceAtLeast(1)
+        }
 
     private fun readIndex(zipInput: ZipInputStream): DictionaryArchiveIndex {
         val json = JSONObject(String(zipInput.readBytes(), StandardCharsets.UTF_8))
@@ -69,41 +85,57 @@ class TermBankImporter {
             while (it.hasNext()) {
                 parseTermEntry(it, catalogId)?.let { term -> batch.add(term) }
                 if (batch.size >= BATCH_SIZE) {
-                    onBatch(batch.toList())
+                    onBatch(batch)
                     batch.clear()
                 }
             }
             it.endArray()
         }
         if (batch.isNotEmpty()) {
-            onBatch(batch.toList())
+            onBatch(batch)
         }
     }
 
     private fun parseTermEntry(reader: JsonReader, catalogId: String): TermRecord? {
         reader.beginArray()
-        val entry = JSONArray()
+        if (!reader.hasNext()) {
+            reader.endArray()
+            return null
+        }
+
+        val expression = reader.nextString()
+        val reading = if (reader.hasNext()) reader.nextString() else ""
+        if (reader.hasNext()) skipOneValue(reader)
+        if (reader.hasNext()) skipOneValue(reader)
+        val score = if (reader.hasNext()) readScoreValue(reader) else 0
+
+        var senseContent = if (reader.hasNext()) {
+            readGlossaryField(reader)
+        } else {
+            SenseContentData()
+        }
+
+        val legacyDefinitions = mutableListOf<String>()
         while (reader.hasNext()) {
-            entry.put(readJsonValue(reader))
+            when (val item = readJsonValue(reader)) {
+                is String -> {
+                    if (item.isNotBlank() && !isJunkDefinition(item)) {
+                        legacyDefinitions += item
+                    }
+                }
+            }
         }
         reader.endArray()
 
-        if (entry.length() < 6) return null
-        val expression = entry.optString(0)
-        val reading = entry.optString(1)
-        val score = entry.optInt(4, 0)
-        val glossary = entry.opt(5)
-        val senseContent = sanitizeSenseContent(
-            when (glossary) {
-                is JSONArray -> extractSenseContentFromGlossary(glossary)
-                is String -> SenseContentData(
-                    senseBlocks = listOf(
-                        SenseBlock(definitions = listOf(glossary)),
-                    ),
-                )
-                else -> extractLegacySenseContent(entry)
-            },
-        )
+        if (!senseContent.hasContent() && legacyDefinitions.isNotEmpty()) {
+            senseContent = SenseContentData(
+                senseBlocks = listOf(
+                    SenseBlock(definitions = legacyDefinitions),
+                ),
+            )
+        }
+
+        senseContent = sanitizeSenseContent(senseContent)
         if (expression.isBlank() || !senseContent.hasContent()) return null
         return TermRecord(
             dictionaryId = catalogId,
@@ -112,6 +144,49 @@ class TermBankImporter {
             glossesJson = encodeSenseContent(senseContent),
             score = score,
         )
+    }
+
+    private fun readGlossaryField(reader: JsonReader): SenseContentData {
+        return when (reader.peek()) {
+            JsonToken.STRING -> {
+                val text = reader.nextString()
+                if (text.isBlank() || isJunkDefinition(text)) {
+                    SenseContentData()
+                } else {
+                    SenseContentData(
+                        senseBlocks = listOf(
+                            SenseBlock(definitions = listOf(text)),
+                        ),
+                    )
+                }
+            }
+            JsonToken.BEGIN_ARRAY -> {
+                val glossary = readJsonValue(reader) as? JSONArray ?: return SenseContentData()
+                extractSenseContentFromGlossary(glossary)
+            }
+            else -> {
+                readJsonValue(reader)
+                SenseContentData()
+            }
+        }
+    }
+
+    private fun readScoreValue(reader: JsonReader): Int {
+        return when (reader.peek()) {
+            JsonToken.NUMBER -> {
+                val raw = reader.nextString()
+                raw.toIntOrNull() ?: raw.toDoubleOrNull()?.toInt() ?: 0
+            }
+            JsonToken.STRING -> reader.nextString().toIntOrNull() ?: 0
+            else -> {
+                reader.skipValue()
+                0
+            }
+        }
+    }
+
+    private fun skipOneValue(reader: JsonReader) {
+        readJsonValue(reader)
     }
 
     private fun readJsonValue(reader: JsonReader): Any? {
@@ -148,27 +223,6 @@ class TermBankImporter {
                 reader.skipValue()
                 null
             }
-        }
-    }
-
-    private fun extractLegacySenseContent(entry: JSONArray): SenseContentData {
-        if (entry.length() <= 5) return SenseContentData()
-        val definitions = buildList {
-            for (index in 5 until entry.length()) {
-                val item = entry.opt(index)
-                if (item is String && item.isNotBlank() && !isJunkDefinition(item)) {
-                    add(item)
-                }
-            }
-        }
-        return if (definitions.isEmpty()) {
-            SenseContentData()
-        } else {
-            SenseContentData(
-                senseBlocks = listOf(
-                    SenseBlock(definitions = definitions),
-                ),
-            )
         }
     }
 
@@ -222,7 +276,7 @@ class TermBankImporter {
     }
 
     companion object {
-        private const val BATCH_SIZE = 500
+        private const val BATCH_SIZE = 2000
     }
 }
 

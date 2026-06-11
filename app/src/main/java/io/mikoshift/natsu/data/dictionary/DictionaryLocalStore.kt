@@ -40,10 +40,12 @@ class DictionaryLocalStore(context: Context) {
     private val appContext = context.applicationContext
     private val helper = DictionaryOpenHelper(appContext)
     private val changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private var orphansPurged = false
 
     fun observeChanges() = changes.asSharedFlow()
 
     suspend fun getAllDictionaries(): List<DictionaryRecord> = withContext(Dispatchers.IO) {
+        purgeOrphanTermsIfNeeded()
         helper.readableDatabase.use { db ->
             db.query(
                 TABLE_DICTIONARIES,
@@ -168,26 +170,44 @@ class DictionaryLocalStore(context: Context) {
         block: suspend (insertBatch: suspend (List<TermRecord>) -> Unit) -> Unit,
     ) = withContext(Dispatchers.IO) {
         val db = helper.writableDatabase
+        val statement = db.compileStatement(
+            """
+            INSERT INTO $TABLE_TERMS
+            (dictionary_id, expression, reading, glosses, score)
+            VALUES (?, ?, ?, ?, ?)
+            """.trimIndent(),
+        )
+        var rowsSinceCommit = 0
+
+        fun insertTerm(term: TermRecord) {
+            statement.clearBindings()
+            statement.bindString(1, term.dictionaryId)
+            statement.bindString(2, term.expression)
+            statement.bindString(3, term.reading)
+            statement.bindString(4, term.glossesJson)
+            statement.bindLong(5, term.score.toLong())
+            statement.executeInsert()
+            rowsSinceCommit++
+            if (rowsSinceCommit >= COMMIT_EVERY_ROWS) {
+                db.setTransactionSuccessful()
+                db.endTransaction()
+                db.beginTransaction()
+                rowsSinceCommit = 0
+            }
+        }
+
         db.beginTransaction()
         try {
             db.delete(TABLE_TERMS, "dictionary_id = ?", arrayOf(dictionaryId))
-            val statement = db.compileStatement(
-                """
-                INSERT INTO $TABLE_TERMS
-                (dictionary_id, expression, reading, glosses, score)
-                VALUES (?, ?, ?, ?, ?)
-                """.trimIndent(),
-            )
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+
+        db.beginTransaction()
+        try {
             val insertBatch: suspend (List<TermRecord>) -> Unit = { terms ->
-                terms.forEach { term ->
-                    statement.clearBindings()
-                    statement.bindString(1, term.dictionaryId)
-                    statement.bindString(2, term.expression)
-                    statement.bindString(3, term.reading)
-                    statement.bindString(4, term.glossesJson)
-                    statement.bindLong(5, term.score.toLong())
-                    statement.executeInsert()
-                }
+                terms.forEach(::insertTerm)
             }
             block(insertBatch)
             db.setTransactionSuccessful()
@@ -195,6 +215,19 @@ class DictionaryLocalStore(context: Context) {
             db.endTransaction()
         }
         changes.tryEmit(Unit)
+    }
+
+    private fun purgeOrphanTermsIfNeeded() {
+        if (orphansPurged) return
+        orphansPurged = true
+        helper.writableDatabase.use { db ->
+            db.execSQL(
+                """
+                DELETE FROM $TABLE_TERMS
+                WHERE dictionary_id NOT IN (SELECT id FROM $TABLE_DICTIONARIES)
+                """.trimIndent(),
+            )
+        }
     }
 
     suspend fun lookupTerms(queries: List<String>): List<TermLookupRow> = withContext(Dispatchers.IO) {
@@ -268,6 +301,12 @@ class DictionaryLocalStore(context: Context) {
     private class DictionaryOpenHelper(context: Context) :
         SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
 
+        override fun onConfigure(db: SQLiteDatabase) {
+            db.enableWriteAheadLogging()
+            db.execSQL("PRAGMA synchronous=NORMAL")
+            db.execSQL("PRAGMA temp_store=MEMORY")
+        }
+
         override fun onCreate(db: SQLiteDatabase) {
             db.execSQL(
                 """
@@ -307,6 +346,7 @@ class DictionaryLocalStore(context: Context) {
         private const val DB_VERSION = 1
         private const val TABLE_DICTIONARIES = "dictionaries"
         private const val TABLE_TERMS = "terms"
+        private const val COMMIT_EVERY_ROWS = 10_000
     }
 }
 
