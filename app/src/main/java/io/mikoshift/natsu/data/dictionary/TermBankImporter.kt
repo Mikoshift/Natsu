@@ -1,5 +1,6 @@
 package io.mikoshift.natsu.data.dictionary
 
+import io.mikoshift.natsu.domain.model.SenseBlock
 import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken
 import org.json.JSONArray
@@ -92,16 +93,21 @@ class TermBankImporter {
         val reading = entry.optString(1)
         val score = entry.optInt(4, 0)
         val glossary = entry.opt(5)
-        val glosses = when (glossary) {
-            is JSONArray -> extractGlosses(glossary)
-            else -> extractLegacyGlosses(entry)
+        val senseContent = when (glossary) {
+            is JSONArray -> extractSenseContentFromGlossary(glossary)
+            is String -> SenseContentData(
+                senseBlocks = listOf(
+                    SenseBlock(definitions = listOf(glossary)),
+                ),
+            )
+            else -> extractLegacySenseContent(entry)
         }
-        if (expression.isBlank() || glosses.isEmpty()) return null
+        if (expression.isBlank() || !senseContent.hasContent()) return null
         return TermRecord(
             dictionaryId = catalogId,
             expression = expression,
             reading = reading.ifBlank { expression },
-            glossesJson = glossesToJson(glosses),
+            glossesJson = encodeSenseContent(senseContent),
             score = score,
         )
     }
@@ -143,62 +149,67 @@ class TermBankImporter {
         }
     }
 
-    private fun extractLegacyGlosses(entry: JSONArray): List<String> {
-        if (entry.length() <= 5) return emptyList()
-        val glosses = mutableListOf<String>()
-        for (index in 5 until entry.length()) {
-            val item = entry.opt(index)
-            if (item is String && item.isNotBlank()) {
-                glosses.add(item)
-            }
-        }
-        return glosses
-    }
-
-    private fun extractGlosses(glossary: Any?): List<String> {
-        if (glossary == null) return emptyList()
-        return when (glossary) {
-            is JSONArray -> extractGlossesFromArray(glossary)
-            is String -> listOf(glossary)
-            else -> emptyList()
-        }
-    }
-
-    private fun extractGlossesFromArray(array: JSONArray): List<String> {
-        val glosses = mutableListOf<String>()
-        for (index in 0 until array.length()) {
-            when (val item = array.get(index)) {
-                is String -> glosses.add(item)
-                is JSONObject -> glosses.addAll(extractGlossFromObject(item))
-            }
-        }
-        return glosses.filter { it.isNotBlank() }
-    }
-
-    private fun extractGlossFromObject(item: JSONObject): List<String> {
-        return when (item.optString("type")) {
-            "text" -> listOfNotNull(item.optString("text").takeIf { it.isNotBlank() })
-            "structured-content" -> extractStructuredContent(item.opt("content"))
-            else -> emptyList()
-        }
-    }
-
-    private fun extractStructuredContent(content: Any?): List<String> {
-        return when (content) {
-            is String -> listOfNotNull(content.takeIf { it.isNotBlank() })
-            is JSONObject -> {
-                val text = content.optString("content").takeIf { it.isNotBlank() }
-                    ?: content.optString("text").takeIf { it.isNotBlank() }
-                listOfNotNull(text)
-            }
-            is JSONArray -> {
-                buildList {
-                    for (index in 0 until content.length()) {
-                        addAll(extractStructuredContent(content.get(index)))
-                    }
+    private fun extractLegacySenseContent(entry: JSONArray): SenseContentData {
+        if (entry.length() <= 5) return SenseContentData()
+        val definitions = buildList {
+            for (index in 5 until entry.length()) {
+                val item = entry.opt(index)
+                if (item is String && item.isNotBlank()) {
+                    add(item)
                 }
             }
-            else -> emptyList()
+        }
+        return if (definitions.isEmpty()) {
+            SenseContentData()
+        } else {
+            SenseContentData(
+                senseBlocks = listOf(
+                    SenseBlock(definitions = definitions),
+                ),
+            )
+        }
+    }
+
+    private fun extractSenseContentFromGlossary(glossary: JSONArray): SenseContentData {
+        var result = SenseContentData()
+        for (index in 0 until glossary.length()) {
+            result = result.merge(
+                when (val item = glossary.get(index)) {
+                    is String -> SenseContentData(
+                        senseBlocks = listOf(
+                            SenseBlock(definitions = listOf(item)),
+                        ),
+                    )
+                    is JSONObject -> extractSenseContentFromObject(item)
+                    else -> SenseContentData()
+                },
+            )
+        }
+        return result
+    }
+
+    private fun extractSenseContentFromObject(item: JSONObject): SenseContentData {
+        return when (item.optString("type")) {
+            "text" -> {
+                val text = item.optString("text").trim()
+                if (text.isBlank()) {
+                    SenseContentData()
+                } else {
+                    SenseContentData(
+                        senseBlocks = listOf(
+                            SenseBlock(definitions = listOf(text)),
+                        ),
+                    )
+                }
+            }
+            "structured-content" -> StructuredContentPlainText.extractSenseContent(item.opt("content"))
+            else -> {
+                if (item.has("tag")) {
+                    StructuredContentPlainText.extractSenseContent(item)
+                } else {
+                    SenseContentData()
+                }
+            }
         }
     }
 

@@ -304,13 +304,4 @@ class DictionaryLocalStore(context: Context) {
     }
 }
 
-fun parseGlossesJson(json: String): List<String> {
-    val array = JSONArray(json)
-    return buildList {
-        for (index in 0 until array.length()) {
-            add(array.getString(index))
-        }
-    }
-}
-
-fun glossesToJson(glosses: List<String>): String = JSONArray(glosses).toString()
+fun parseGlossesJson(json: String): SenseContentData = parseSenseContentJson(json)

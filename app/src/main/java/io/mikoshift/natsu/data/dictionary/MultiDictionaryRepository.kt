@@ -23,11 +23,13 @@ class MultiDictionaryRepository(
         if (rows.isEmpty()) return null
 
         val senses = rows.map { row ->
+            val content = parseSenseContentJson(row.glossesJson)
             DictionarySense(
                 dictionaryTitle = row.dictionaryTitle,
                 kanji = listOf(row.expression),
                 readings = listOf(row.reading),
-                glosses = parseGlossesJson(row.glossesJson),
+                partsOfSpeech = content.partsOfSpeech,
+                senseBlocks = content.senseBlocks,
             )
         }
 

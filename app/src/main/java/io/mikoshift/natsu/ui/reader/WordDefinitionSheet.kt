@@ -16,11 +16,13 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import io.mikoshift.natsu.R
 import io.mikoshift.natsu.domain.model.DictionaryEntry
 import io.mikoshift.natsu.domain.model.DictionarySense
+import io.mikoshift.natsu.domain.model.SenseBlock
 import io.mikoshift.natsu.domain.model.TextToken
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -101,7 +103,7 @@ private fun SenseItem(
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         if (index > 1) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
@@ -109,28 +111,56 @@ private fun SenseItem(
         Text(
             text = stringResource(R.string.dictionary_source_label, sense.dictionaryTitle),
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        val headword = buildString {
-            if (sense.kanji.isNotEmpty()) {
-                append(sense.kanji.joinToString(", "))
-            }
-            if (sense.readings.isNotEmpty()) {
-                if (isNotEmpty()) append(" · ")
-                append(sense.readings.joinToString(", "))
-            }
-        }
-        if (headword.isNotBlank()) {
+        if (sense.partsOfSpeech.isNotEmpty()) {
             Text(
-                text = headword,
+                text = sense.partsOfSpeech.joinToString(" · "),
                 style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.primary,
+            )
+        }
+        sense.senseBlocks.forEachIndexed { blockIndex, block ->
+            SenseBlockItem(
+                number = if (sense.senseBlocks.size > 1) blockIndex + 1 else null,
+                block = block,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SenseBlockItem(
+    number: Int?,
+    block: SenseBlock,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        block.definitions.forEach { definition ->
+            Text(
+                text = buildString {
+                    if (number != null) append("$number. ")
+                    append(definition)
+                },
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        }
+        block.exampleJapanese?.let { example ->
+            Text(
+                text = example,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        sense.glosses.forEach { gloss ->
+        block.exampleEnglish?.let { translation ->
             Text(
-                text = "$index. $gloss",
-                style = MaterialTheme.typography.bodyLarge,
+                text = translation,
+                style = MaterialTheme.typography.bodyMedium,
+                fontStyle = FontStyle.Italic,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
