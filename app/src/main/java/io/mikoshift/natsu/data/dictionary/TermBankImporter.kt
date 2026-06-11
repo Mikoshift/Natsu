@@ -34,21 +34,20 @@ class TermBankImporter {
                 when {
                     entryName == "index.json" -> {
                         index = readIndex(zipInput)
-                        zipInput.closeEntry()
                     }
                     entryName.startsWith("term_bank") && entryName.endsWith(".json") -> {
                         parseTermBankStream(zipInput, catalogId, onBatch)
-                        zipInput.closeEntry()
                     }
-                    else -> zipInput.closeEntry()
+                    else -> Unit
                 }
+                zipInput.closeEntry()
             }
         }
         return index ?: error("index.json not found in dictionary archive")
     }
 
-    private fun readIndex(input: InputStream): DictionaryArchiveIndex {
-        val json = JSONObject(input.bufferedReader().readText())
+    private fun readIndex(zipInput: ZipInputStream): DictionaryArchiveIndex {
+        val json = JSONObject(String(zipInput.readBytes(), StandardCharsets.UTF_8))
         return DictionaryArchiveIndex(
             title = json.getString("title"),
             revision = json.optString("revision", "1"),
@@ -56,21 +55,24 @@ class TermBankImporter {
     }
 
     private suspend fun parseTermBankStream(
-        input: InputStream,
+        zipInput: ZipInputStream,
         catalogId: String,
         onBatch: suspend (List<TermRecord>) -> Unit,
     ) {
         val batch = ArrayList<TermRecord>(BATCH_SIZE)
-        JsonReader(InputStreamReader(input, StandardCharsets.UTF_8)).use { reader ->
-            reader.beginArray()
-            while (reader.hasNext()) {
-                parseTermEntry(reader, catalogId)?.let { batch.add(it) }
+        val reader = JsonReader(
+            InputStreamReader(NonClosingInputStream(zipInput), StandardCharsets.UTF_8),
+        )
+        reader.use {
+            it.beginArray()
+            while (it.hasNext()) {
+                parseTermEntry(it, catalogId)?.let { term -> batch.add(term) }
                 if (batch.size >= BATCH_SIZE) {
                     onBatch(batch.toList())
                     batch.clear()
                 }
             }
-            reader.endArray()
+            it.endArray()
         }
         if (batch.isNotEmpty()) {
             onBatch(batch.toList())
@@ -203,4 +205,22 @@ class TermBankImporter {
     companion object {
         private const val BATCH_SIZE = 500
     }
+}
+
+/**
+ * Prevents nested readers (JsonReader, BufferedReader) from closing [ZipInputStream]
+ * when they are closed at the end of an entry.
+ */
+private class NonClosingInputStream(
+    private val delegate: InputStream,
+) : InputStream() {
+    override fun read(): Int = delegate.read()
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int = delegate.read(b, off, len)
+
+    override fun available(): Int = delegate.available()
+
+    override fun skip(n: Long): Long = delegate.skip(n)
+
+    override fun close() = Unit
 }
