@@ -13,5 +13,17 @@ interface DocumentRepository {
 
     suspend fun readDocumentText(document: Document): Result<String>
 
-    suspend fun updateReadingPosition(documentId: String, paragraphIndex: Int)
+    suspend fun renameDocument(id: String, title: String): Result<Unit>
+
+    suspend fun deleteDocument(id: String): Result<Unit>
+
+    suspend fun updateReadingPosition(
+        documentId: String,
+        charOffset: Int,
+        paragraphIndex: Int,
+    )
+
+    suspend fun ensureCharCount(documentId: String, charCount: Int)
+
+    fun notifyDocumentsChanged()
 }

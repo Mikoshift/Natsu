@@ -31,6 +31,24 @@ class FuriganaTest {
         assertTrue(shouldShowFurigana(token))
     }
 
+    @Test
+    fun shouldShowFurigana_latinWord_returnsFalse() {
+        val token = token(surface = "Project", reading = "プロジェクト")
+        assertFalse(shouldShowFurigana(token))
+    }
+
+    @Test
+    fun shouldShowFurigana_latinWithStarReading_returnsFalse() {
+        val token = token(surface = "the", reading = "*")
+        assertFalse(shouldShowFurigana(token))
+    }
+
+    @Test
+    fun containsKanji_detectsKanjiInMixedText() {
+        assertTrue(containsKanji("吾輩は猫"))
+        assertFalse(containsKanji("Project Gutenberg"))
+    }
+
     private fun token(
         surface: String,
         reading: String,

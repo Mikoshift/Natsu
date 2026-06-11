@@ -28,10 +28,3 @@ class KuromojiTokenizer : TextTokenizer {
         )
     }
 }
-
-fun splitIntoParagraphs(text: String): List<String> {
-    if (text.isBlank()) return emptyList()
-    return text.split("\n")
-        .map { it.trimEnd() }
-        .filter { it.isNotEmpty() }
-}

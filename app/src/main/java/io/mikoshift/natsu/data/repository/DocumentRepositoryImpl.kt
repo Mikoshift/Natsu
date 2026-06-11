@@ -30,11 +30,14 @@ class DocumentRepositoryImpl(
         displayName: String?,
     ): Result<Document> =
         textFileImporter.import(uri, displayName).mapCatching { imported ->
+            val content = File(imported.filePath).readText(Charsets.UTF_8)
             val document = Document(
                 id = imported.id,
                 title = imported.title,
                 filePath = imported.filePath,
                 importedAt = imported.importedAt,
+                charCount = content.length,
+                lastReadCharOffset = 0,
                 lastReadParagraphIndex = 0,
             )
             documentLocalStore.insert(document)
@@ -48,7 +51,45 @@ class DocumentRepositoryImpl(
             }
         }
 
-    override suspend fun updateReadingPosition(documentId: String, paragraphIndex: Int) {
-        documentLocalStore.updateReadingPosition(documentId, paragraphIndex)
+    override suspend fun renameDocument(id: String, title: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val trimmed = title.trim()
+                require(trimmed.isNotEmpty()) { "Title cannot be empty" }
+                documentLocalStore.getById(id)
+                    ?: throw NoSuchElementException("Document not found")
+                documentLocalStore.updateTitle(id, trimmed)
+                Unit
+            }
+        }
+
+    override suspend fun deleteDocument(id: String): Result<Unit> =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val document = documentLocalStore.getById(id)
+                    ?: throw NoSuchElementException("Document not found")
+                File(document.filePath).delete()
+                documentLocalStore.delete(id)
+                Unit
+            }
+        }
+
+    override suspend fun updateReadingPosition(
+        documentId: String,
+        charOffset: Int,
+        paragraphIndex: Int,
+    ) {
+        documentLocalStore.updateReadingPosition(documentId, charOffset, paragraphIndex)
+    }
+
+    override suspend fun ensureCharCount(documentId: String, charCount: Int) {
+        val document = documentLocalStore.getById(documentId) ?: return
+        if (document.charCount != charCount) {
+            documentLocalStore.updateCharCount(documentId, charCount)
+        }
+    }
+
+    override fun notifyDocumentsChanged() {
+        documentLocalStore.notifyDocumentsChanged()
     }
 }

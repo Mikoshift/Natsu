@@ -36,4 +36,13 @@
     <string name="settings_furigana">Furigana</string>
     <string name="settings_furigana_off">Off</string>
     <string name="settings_furigana_always">Always</string>
+    <string name="document_rename">Rename</string>
+    <string name="document_delete">Delete</string>
+    <string name="document_delete_title">Delete book?</string>
+    <string name="document_delete_message">"%1$s" will be removed from the library.</string>
+    <string name="document_actions">Book actions</string>
+    <string name="document_continue_reading">Continue reading</string>
+    <string name="document_continue_reading_percent">%1$d%% · offset %2$d · Continue reading</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
 </resources>

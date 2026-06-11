@@ -42,26 +42,37 @@ fun ReaderScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val readerSettings by viewModel.readerSettings.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
+    val contentReady = !uiState.isLoading &&
+        uiState.errorMessage == null &&
+        uiState.paragraphs.isNotEmpty()
 
     LaunchedEffect(documentId) {
         viewModel.loadDocument(documentId)
     }
 
-    LaunchedEffect(uiState.scrollToIndex, uiState.paragraphs.size) {
-        if (uiState.paragraphs.isNotEmpty() && uiState.scrollToIndex > 0) {
-            listState.scrollToItem(uiState.scrollToIndex.coerceAtMost(uiState.paragraphs.lastIndex))
+    LaunchedEffect(contentReady, uiState.scrollToIndex) {
+        if (contentReady && uiState.scrollToIndex > 0) {
+            listState.scrollToItem(
+                uiState.scrollToIndex.coerceAtMost(uiState.paragraphs.lastIndex),
+            )
         }
     }
 
-    LaunchedEffect(listState) {
+    LaunchedEffect(contentReady, listState) {
+        if (!contentReady) return@LaunchedEffect
         snapshotFlow { listState.firstVisibleItemIndex }
             .distinctUntilChanged()
             .collect { index -> viewModel.saveReadingPosition(index) }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(contentReady) {
         onDispose {
-            viewModel.saveReadingPosition(listState.firstVisibleItemIndex)
+            if (contentReady) {
+                viewModel.saveReadingPosition(
+                    paragraphIndex = listState.firstVisibleItemIndex,
+                    immediate = true,
+                )
+            }
         }
     }
 
@@ -78,7 +89,10 @@ fun ReaderScreen(
                         )
                     },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(onClick = {
+                            viewModel.flushReadingPosition(listState.firstVisibleItemIndex)
+                            onBack()
+                        }) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.back),

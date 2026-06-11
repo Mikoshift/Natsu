@@ -2,6 +2,7 @@ package io.mikoshift.natsu.ui.reader
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -49,12 +50,23 @@ fun TokenizedParagraph(
             onWordClick = onWordClick,
             modifier = modifier,
         )
-        FuriganaMode.ALWAYS -> FuriganaTokenizedParagraph(
-            tokens = tokens,
-            settings = settings,
-            onWordClick = onWordClick,
-            modifier = modifier,
-        )
+        FuriganaMode.ALWAYS -> {
+            if (tokens.any(::shouldShowFurigana)) {
+                FuriganaTokenizedParagraph(
+                    tokens = tokens,
+                    settings = settings,
+                    onWordClick = onWordClick,
+                    modifier = modifier,
+                )
+            } else {
+                PlainTokenizedParagraph(
+                    tokens = tokens,
+                    settings = settings,
+                    onWordClick = onWordClick,
+                    modifier = modifier,
+                )
+            }
+        }
     }
 }
 
@@ -115,7 +127,8 @@ private fun FuriganaTokenizedParagraph(
     onWordClick: (TextToken) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val textStyle = readerTextStyle(settings)
+    val baseStyle = readerTextStyle(settings)
+    val morphemeStyle = baseStyle.copy(lineHeight = baseStyle.fontSize)
     val furiganaStyle = furiganaTextStyle(settings)
     val density = LocalDensity.current
     val furiganaSlotHeight = with(density) {
@@ -126,11 +139,18 @@ private fun FuriganaTokenizedParagraph(
         modifier = modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
+        itemVerticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.Start,
+        verticalArrangement = Arrangement.spacedBy(
+            with(density) {
+                (settings.fontSizeSp * (settings.lineSpacingMultiplier - 1f).coerceAtLeast(0.25f)).sp.toDp()
+            },
+        ),
     ) {
         tokens.forEach { token ->
             FuriganaToken(
                 token = token,
-                textStyle = textStyle,
+                textStyle = morphemeStyle,
                 furiganaStyle = furiganaStyle,
                 furiganaSlotHeight = furiganaSlotHeight,
                 onClick = { onWordClick(token) },
@@ -158,11 +178,11 @@ private fun FuriganaToken(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = clickModifier,
     ) {
-        Box(
-            modifier = Modifier.heightIn(min = furiganaSlotHeight),
-            contentAlignment = Alignment.BottomCenter,
-        ) {
-            if (showRuby) {
+        if (showRuby) {
+            Box(
+                modifier = Modifier.heightIn(min = furiganaSlotHeight),
+                contentAlignment = Alignment.BottomCenter,
+            ) {
                 Text(
                     text = furiganaReading(token),
                     style = furiganaStyle,
@@ -184,11 +204,7 @@ private fun FuriganaToken(
 @Composable
 private fun readerTextStyle(settings: ReaderSettings): TextStyle {
     val fontSize = settings.fontSizeSp.sp
-    val lineHeightSp = if (settings.furiganaMode == FuriganaMode.ALWAYS) {
-        settings.fontSizeSp * (FURIGANA_SLOT_RATIO + settings.lineSpacingMultiplier)
-    } else {
-        settings.fontSizeSp * settings.lineSpacingMultiplier
-    }
+    val lineHeightSp = settings.fontSizeSp * settings.lineSpacingMultiplier
     return MaterialTheme.typography.bodyLarge.copy(
         fontSize = fontSize,
         lineHeight = lineHeightSp.sp,
