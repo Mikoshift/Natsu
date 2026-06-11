@@ -14,6 +14,7 @@
     <string name="dictionary_download">Download</string>
     <string name="dictionary_delete">Delete</string>
     <string name="dictionary_downloading">Downloading…</string>
+    <string name="dictionary_installing">Installing…</string>
     <string name="dictionary_empty_hint">Install at least one dictionary to look up words in the reader</string>
     <string name="dictionary_enabled">Enabled</string>
     <string name="account_guest">Guest</string>

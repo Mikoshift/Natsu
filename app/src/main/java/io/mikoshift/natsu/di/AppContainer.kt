@@ -9,7 +9,7 @@ import io.mikoshift.natsu.data.dictionary.DictionaryDownloadManager
 import io.mikoshift.natsu.data.dictionary.DictionaryLocalStore
 import io.mikoshift.natsu.data.dictionary.DictionaryManagerRepositoryImpl
 import io.mikoshift.natsu.data.dictionary.MultiDictionaryRepository
-import io.mikoshift.natsu.data.dictionary.YomitanTermBankImporter
+import io.mikoshift.natsu.data.dictionary.TermBankImporter
 import io.mikoshift.natsu.data.local.DocumentLocalStore
 import io.mikoshift.natsu.data.reader.KuromojiTokenizer
 import io.mikoshift.natsu.data.reader.TextFileImporter
@@ -30,7 +30,7 @@ class AppContainer(context: Context) {
     private val dictionaryLocalStore: DictionaryLocalStore by lazy { DictionaryLocalStore(appContext) }
     private val dictionaryCatalogLoader: DictionaryCatalogLoader by lazy { DictionaryCatalogLoader(appContext) }
     private val dictionaryDownloadManager: DictionaryDownloadManager by lazy { DictionaryDownloadManager() }
-    private val yomitanTermBankImporter: YomitanTermBankImporter by lazy { YomitanTermBankImporter() }
+    private val termBankImporter: TermBankImporter by lazy { TermBankImporter() }
 
     val documentRepository: DocumentRepository by lazy {
         DocumentRepositoryImpl(
@@ -45,7 +45,7 @@ class AppContainer(context: Context) {
             catalogLoader = dictionaryCatalogLoader,
             localStore = dictionaryLocalStore,
             downloadManager = dictionaryDownloadManager,
-            importer = yomitanTermBankImporter,
+            importer = termBankImporter,
         )
     }
 

@@ -21,7 +21,7 @@ class DictionaryManagerRepositoryImpl(
     private val catalogLoader: DictionaryCatalogLoader,
     private val localStore: DictionaryLocalStore,
     private val downloadManager: DictionaryDownloadManager,
-    private val importer: YomitanTermBankImporter,
+    private val importer: TermBankImporter,
 ) : DictionaryManagerRepository {
 
     private val appContext = context.applicationContext
@@ -107,19 +107,23 @@ class DictionaryManagerRepositoryImpl(
                     downloadProgress.value = downloadProgress.value + (catalogId to progress)
                 }.getOrThrow()
 
-                val importResult = importer.importZip(zipFile, catalogId)
+                downloadProgress.value = downloadProgress.value + (catalogId to 0.99f)
+                var index: DictionaryArchiveIndex? = null
+                localStore.replaceTermsStreaming(catalogId) { insertBatch ->
+                    index = importer.importZip(zipFile, catalogId, insertBatch)
+                }
+                val dictionaryIndex = index ?: error("Dictionary index missing after import")
                 val priority = localStore.nextPriority()
                 localStore.upsertDictionary(
                     DictionaryRecord(
                         id = catalogId,
-                        title = importResult.index.title,
-                        revision = importResult.index.revision,
+                        title = dictionaryIndex.title,
+                        revision = dictionaryIndex.revision,
                         enabled = true,
                         priority = priority,
                         installedAt = System.currentTimeMillis(),
                     ),
                 )
-                localStore.replaceTerms(catalogId, importResult.terms)
                 Result.success(Unit)
             } catch (error: Throwable) {
                 localStore.deleteDictionary(catalogId)

@@ -59,6 +59,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kuromoji.ipadic)
+    implementation(libs.gson)
     implementation(libs.okhttp)
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

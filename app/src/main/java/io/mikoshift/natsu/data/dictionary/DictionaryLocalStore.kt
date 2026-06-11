@@ -158,17 +158,27 @@ class DictionaryLocalStore(context: Context) {
     }
 
     suspend fun replaceTerms(dictionaryId: String, terms: List<TermRecord>) = withContext(Dispatchers.IO) {
-        helper.writableDatabase.use { db ->
-            db.beginTransaction()
-            try {
-                db.delete(TABLE_TERMS, "dictionary_id = ?", arrayOf(dictionaryId))
-                val statement = db.compileStatement(
-                    """
-                    INSERT INTO $TABLE_TERMS
-                    (dictionary_id, expression, reading, glosses, score)
-                    VALUES (?, ?, ?, ?, ?)
-                    """.trimIndent(),
-                )
+        replaceTermsStreaming(dictionaryId) { insertBatch ->
+            insertBatch(terms)
+        }
+    }
+
+    suspend fun replaceTermsStreaming(
+        dictionaryId: String,
+        block: suspend (insertBatch: suspend (List<TermRecord>) -> Unit) -> Unit,
+    ) = withContext(Dispatchers.IO) {
+        val db = helper.writableDatabase
+        db.beginTransaction()
+        try {
+            db.delete(TABLE_TERMS, "dictionary_id = ?", arrayOf(dictionaryId))
+            val statement = db.compileStatement(
+                """
+                INSERT INTO $TABLE_TERMS
+                (dictionary_id, expression, reading, glosses, score)
+                VALUES (?, ?, ?, ?, ?)
+                """.trimIndent(),
+            )
+            val insertBatch: suspend (List<TermRecord>) -> Unit = { terms ->
                 terms.forEach { term ->
                     statement.clearBindings()
                     statement.bindString(1, term.dictionaryId)
@@ -178,10 +188,11 @@ class DictionaryLocalStore(context: Context) {
                     statement.bindLong(5, term.score.toLong())
                     statement.executeInsert()
                 }
-                db.setTransactionSuccessful()
-            } finally {
-                db.endTransaction()
             }
+            block(insertBatch)
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
         changes.tryEmit(Unit)
     }
