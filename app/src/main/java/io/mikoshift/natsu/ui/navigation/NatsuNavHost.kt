@@ -15,6 +15,8 @@ import io.mikoshift.natsu.ui.library.LibraryScreen
 import io.mikoshift.natsu.ui.library.LibraryViewModel
 import io.mikoshift.natsu.ui.reader.ReaderScreen
 import io.mikoshift.natsu.ui.reader.ReaderViewModel
+import io.mikoshift.natsu.ui.settings.SettingsScreen
+import io.mikoshift.natsu.ui.settings.SettingsViewModel
 
 @Composable
 fun NatsuNavHost(
@@ -39,6 +41,10 @@ fun NatsuNavHost(
         composable(Routes.DICTIONARIES) {
             val viewModel: DictionariesViewModel = viewModel(factory = appContainer.viewModelFactory)
             DictionariesScreen(viewModel = viewModel)
+        }
+        composable(Routes.SETTINGS) {
+            val viewModel: SettingsViewModel = viewModel(factory = appContainer.viewModelFactory)
+            SettingsScreen(viewModel = viewModel)
         }
         composable(
             route = Routes.READER,

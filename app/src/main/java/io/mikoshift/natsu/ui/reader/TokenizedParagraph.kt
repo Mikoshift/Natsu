@@ -15,16 +15,20 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.domain.model.TextToken
 
 @Composable
 fun TokenizedParagraph(
     tokens: List<TextToken>,
+    settings: ReaderSettings,
     onWordClick: (TextToken) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val textStyle = MaterialTheme.typography.bodyLarge.copy(
-        lineHeight = MaterialTheme.typography.bodyLarge.fontSize * 1.8f,
+        fontSize = settings.fontSizeSp.sp,
+        lineHeight = settings.fontSizeSp.sp * settings.lineSpacingMultiplier,
     )
     val annotatedString = remember(tokens) {
         buildAnnotatedString {

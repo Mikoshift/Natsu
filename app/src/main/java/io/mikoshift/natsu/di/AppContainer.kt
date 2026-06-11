@@ -11,6 +11,7 @@ import io.mikoshift.natsu.data.dictionary.DictionaryManagerRepositoryImpl
 import io.mikoshift.natsu.data.dictionary.MultiDictionaryRepository
 import io.mikoshift.natsu.data.dictionary.TermBankImporter
 import io.mikoshift.natsu.data.local.DocumentLocalStore
+import io.mikoshift.natsu.data.settings.ReaderSettingsStore
 import io.mikoshift.natsu.data.reader.KuromojiTokenizer
 import io.mikoshift.natsu.data.reader.TextFileImporter
 import io.mikoshift.natsu.data.repository.DocumentRepositoryImpl
@@ -21,6 +22,7 @@ import io.mikoshift.natsu.domain.repository.TextTokenizer
 import io.mikoshift.natsu.ui.dictionaries.DictionariesViewModel
 import io.mikoshift.natsu.ui.library.LibraryViewModel
 import io.mikoshift.natsu.ui.reader.ReaderViewModel
+import io.mikoshift.natsu.ui.settings.SettingsViewModel
 
 class AppContainer(context: Context) {
     private val appContext = context.applicationContext
@@ -31,6 +33,7 @@ class AppContainer(context: Context) {
     private val dictionaryCatalogLoader: DictionaryCatalogLoader by lazy { DictionaryCatalogLoader(appContext) }
     private val dictionaryDownloadManager: DictionaryDownloadManager by lazy { DictionaryDownloadManager() }
     private val termBankImporter: TermBankImporter by lazy { TermBankImporter() }
+    val readerSettingsStore: ReaderSettingsStore by lazy { ReaderSettingsStore(appContext) }
 
     val documentRepository: DocumentRepository by lazy {
         DocumentRepositoryImpl(
@@ -64,11 +67,14 @@ class AppContainer(context: Context) {
                         LibraryViewModel(documentRepository) as T
                     modelClass.isAssignableFrom(DictionariesViewModel::class.java) ->
                         DictionariesViewModel(dictionaryManagerRepository) as T
+                    modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
+                        SettingsViewModel(readerSettingsStore) as T
                     modelClass.isAssignableFrom(ReaderViewModel::class.java) ->
                         ReaderViewModel(
                             documentRepository = documentRepository,
                             dictionaryRepository = dictionaryRepository,
                             textTokenizer = textTokenizer,
+                            readerSettingsStore = readerSettingsStore,
                         ) as T
                     else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
                 }

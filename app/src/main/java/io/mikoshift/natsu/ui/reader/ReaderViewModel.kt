@@ -4,15 +4,19 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import io.mikoshift.natsu.domain.model.DictionaryEntry
 import io.mikoshift.natsu.domain.model.Document
+import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.domain.model.TextToken
 import io.mikoshift.natsu.domain.repository.DictionaryRepository
 import io.mikoshift.natsu.domain.repository.DocumentRepository
 import io.mikoshift.natsu.domain.repository.TextTokenizer
 import io.mikoshift.natsu.data.reader.splitIntoParagraphs
+import io.mikoshift.natsu.data.settings.ReaderSettingsStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -40,10 +44,18 @@ class ReaderViewModel(
     private val documentRepository: DocumentRepository,
     private val dictionaryRepository: DictionaryRepository,
     private val textTokenizer: TextTokenizer,
+    readerSettingsStore: ReaderSettingsStore,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReaderUiState())
     val uiState: StateFlow<ReaderUiState> = _uiState.asStateFlow()
+
+    val readerSettings: StateFlow<ReaderSettings> = readerSettingsStore.settings
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = ReaderSettings(),
+        )
 
     private var lastSavedParagraphIndex: Int = -1
 

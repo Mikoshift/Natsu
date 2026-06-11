@@ -70,6 +70,14 @@ fun NatsuAppShell(
                                     }
                                 }
                             },
+                            onNavigateToSettings = {
+                                closeDrawer()
+                                if (currentRoute != Routes.SETTINGS) {
+                                    navController.navigate(Routes.SETTINGS) {
+                                        launchSingleTop = true
+                                    }
+                                }
+                            },
                         )
                     }
                 },

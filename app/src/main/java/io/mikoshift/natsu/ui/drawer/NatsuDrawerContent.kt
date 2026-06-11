@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.MenuBook
 import androidx.compose.material.icons.outlined.LibraryBooks
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationDrawerItem
@@ -83,6 +84,7 @@ fun NatsuDrawerContent(
     selectedRoute: String?,
     onNavigateToLibrary: () -> Unit,
     onNavigateToDictionaries: () -> Unit,
+    onNavigateToSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -110,6 +112,18 @@ fun NatsuDrawerContent(
             icon = {
                 Icon(
                     Icons.AutoMirrored.Outlined.MenuBook,
+                    contentDescription = null,
+                )
+            },
+            modifier = Modifier.padding(horizontal = 12.dp),
+        )
+        NavigationDrawerItem(
+            label = { Text(stringResource(R.string.drawer_settings)) },
+            selected = selectedRoute == Routes.SETTINGS,
+            onClick = onNavigateToSettings,
+            icon = {
+                Icon(
+                    Icons.Outlined.Settings,
                     contentDescription = null,
                 )
             },

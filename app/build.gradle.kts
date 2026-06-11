@@ -61,6 +61,7 @@ dependencies {
     implementation(libs.kuromoji.ipadic)
     implementation(libs.gson)
     implementation(libs.okhttp)
+    implementation(libs.androidx.datastore.preferences)
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
     androidTestImplementation(platform(libs.androidx.compose.bom))
