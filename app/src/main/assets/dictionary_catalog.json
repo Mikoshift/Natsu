@@ -1,0 +1,20 @@
+{
+  "ja": {
+    "terms": [
+      {
+        "id": "jitendex",
+        "name": "Jitendex",
+        "description": "Enhanced Japanese–English dictionary with examples and notes.",
+        "downloadUrl": "https://github.com/stephenmk/stephenmk.github.io/releases/latest/download/jitendex-yomitan.zip",
+        "sizeHintMb": 35
+      },
+      {
+        "id": "jmnedict",
+        "name": "JMnedict",
+        "description": "Dictionary of Japanese proper names (people, places, organizations).",
+        "downloadUrl": "https://github.com/yomidevs/jmdict-yomitan/releases/latest/download/JMnedict.zip",
+        "sizeHintMb": 15
+      }
+    ]
+  }
+}

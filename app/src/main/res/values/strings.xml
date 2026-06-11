@@ -1,3 +1,22 @@
 <resources>
     <string name="app_name">Natsu</string>
+    <string name="library_title">Library</string>
+    <string name="import_text">Import text</string>
+    <string name="library_empty_title">No books</string>
+    <string name="library_empty_message">Tap + to import a UTF-8 .txt file</string>
+    <string name="reader_title">Reader</string>
+    <string name="back">Back</string>
+    <string name="dictionary_not_found">Entry not found</string>
+    <string name="dictionary_not_installed_hint">Install a dictionary from the Dictionaries menu</string>
+    <string name="drawer_dictionaries">Dictionaries</string>
+    <string name="drawer_library">Library</string>
+    <string name="dictionaries_title">Dictionaries</string>
+    <string name="dictionary_download">Download</string>
+    <string name="dictionary_delete">Delete</string>
+    <string name="dictionary_downloading">Downloading…</string>
+    <string name="dictionary_empty_hint">Install at least one dictionary to look up words in the reader</string>
+    <string name="dictionary_enabled">Enabled</string>
+    <string name="account_guest">Guest</string>
+    <string name="menu_open">Open menu</string>
+    <string name="dictionary_source_label">Source: %1$s</string>
 </resources>

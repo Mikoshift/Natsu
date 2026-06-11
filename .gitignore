@@ -13,3 +13,15 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+.kotlin/
+*.hprof
+Thumbs.db
+Desktop.ini
+*.apk
+*.aab
+*.jks
+*.keystore
+keystore.properties
+signing.properties
+app/src/main/assets/dictionary/
