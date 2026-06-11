@@ -108,6 +108,13 @@ private fun SenseItem(
         if (index > 1) {
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
         }
+        formatSenseHeadword(sense)?.let { headword ->
+            Text(
+                text = headword,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
         Text(
             text = stringResource(R.string.dictionary_source_label, sense.dictionaryTitle),
             style = MaterialTheme.typography.labelMedium,
@@ -127,6 +134,13 @@ private fun SenseItem(
             )
         }
     }
+}
+
+private fun formatSenseHeadword(sense: DictionarySense): String? {
+    val expression = sense.kanji.firstOrNull()?.takeIf { it.isNotBlank() } ?: return null
+    val reading = sense.readings.firstOrNull()?.takeIf { it.isNotBlank() } ?: return expression
+    if (expression == reading) return expression
+    return "$expression（$reading）"
 }
 
 @Composable

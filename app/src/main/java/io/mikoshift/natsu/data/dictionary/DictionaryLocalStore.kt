@@ -200,33 +200,39 @@ class DictionaryLocalStore(context: Context) {
     suspend fun lookupTerms(queries: List<String>): List<TermLookupRow> = withContext(Dispatchers.IO) {
         if (queries.isEmpty()) return@withContext emptyList()
         helper.readableDatabase.use { db ->
+            val placeholders = queries.joinToString(",") { "?" }
+            val args = Array(queries.size * 2) { index ->
+                queries[index % queries.size]
+            }
             val results = linkedMapOf<String, TermLookupRow>()
-            for (query in queries) {
-                db.rawQuery(
-                    """
-                    SELECT t.dictionary_id, d.title, d.priority, t.expression, t.reading, t.glosses, t.score
-                    FROM $TABLE_TERMS t
-                    INNER JOIN $TABLE_DICTIONARIES d ON d.id = t.dictionary_id
-                    WHERE d.enabled = 1
-                      AND (t.expression = ? OR t.reading = ?)
-                    ORDER BY d.priority ASC, t.score DESC
-                    """.trimIndent(),
-                    arrayOf(query, query),
-                ).use { cursor ->
-                    while (cursor.moveToNext()) {
-                        val dictionaryId = cursor.getString(0)
-                        val key = "$dictionaryId:${cursor.getString(3)}:${cursor.getString(4)}"
-                        if (key !in results) {
-                            results[key] = TermLookupRow(
-                                dictionaryId = dictionaryId,
-                                dictionaryTitle = cursor.getString(1),
-                                dictionaryPriority = cursor.getInt(2),
-                                expression = cursor.getString(3),
-                                reading = cursor.getString(4),
-                                glossesJson = cursor.getString(5),
-                                score = cursor.getInt(6),
-                            )
-                        }
+            db.rawQuery(
+                """
+                SELECT t.dictionary_id, d.title, d.priority, t.expression, t.reading, t.glosses, t.score
+                FROM $TABLE_TERMS t
+                INNER JOIN $TABLE_DICTIONARIES d ON d.id = t.dictionary_id
+                WHERE d.enabled = 1
+                  AND (t.expression IN ($placeholders) OR t.reading IN ($placeholders))
+                ORDER BY d.priority ASC, t.score DESC
+                """.trimIndent(),
+                args,
+            ).use { cursor ->
+                while (cursor.moveToNext()) {
+                    val dictionaryId = cursor.getString(0)
+                        val key = dedupeTermKey(
+                            dictionaryId = dictionaryId,
+                            expression = cursor.getString(3),
+                            reading = cursor.getString(4),
+                        )
+                    if (key !in results) {
+                        results[key] = TermLookupRow(
+                            dictionaryId = dictionaryId,
+                            dictionaryTitle = cursor.getString(1),
+                            dictionaryPriority = cursor.getInt(2),
+                            expression = cursor.getString(3),
+                            reading = cursor.getString(4),
+                            glossesJson = cursor.getString(5),
+                            score = cursor.getInt(6),
+                        )
                     }
                 }
             }

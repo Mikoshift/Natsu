@@ -40,7 +40,7 @@ object StructuredContentPlainText {
         when (obj.optString("type")) {
             "text" -> {
                 val text = obj.optString("text").trim()
-                return if (text.isBlank()) {
+                return if (text.isBlank() || isJunkDefinition(text)) {
                     SenseContentData()
                 } else {
                     SenseContentData(senseBlocks = listOf(SenseBlock(definitions = listOf(text))))
@@ -228,7 +228,10 @@ fun encodeSenseContent(data: SenseContentData): String {
     return obj.toString()
 }
 
-fun parseSenseContentJson(json: String): SenseContentData {
+fun parseSenseContentJson(json: String): SenseContentData =
+    sanitizeSenseContent(parseSenseContentJsonRaw(json))
+
+private fun parseSenseContentJsonRaw(json: String): SenseContentData {
     val trimmed = json.trim()
     if (trimmed.startsWith("{")) {
         runCatching {
@@ -239,6 +242,35 @@ fun parseSenseContentJson(json: String): SenseContentData {
         }
     }
     return parseLegacyGlossesArray(trimmed)
+}
+
+fun sanitizeSenseContent(data: SenseContentData): SenseContentData {
+    val blocks = data.senseBlocks.mapNotNull { block ->
+        val definitions = block.definitions
+            .map { it.trim() }
+            .filterNot(::isJunkDefinition)
+        if (definitions.isEmpty()) {
+            null
+        } else {
+            block.copy(definitions = definitions)
+        }
+    }
+    return SenseContentData(
+        partsOfSpeech = data.partsOfSpeech,
+        senseBlocks = blocks,
+    )
+}
+
+fun isJunkDefinition(line: String): Boolean {
+    val text = line.trim()
+    if (text.isBlank()) return true
+    if (text.matches(Regex("\\[\\d+\\]"))) return true
+    if (text.equals("JMdict", ignoreCase = true)) return true
+    if (text.equals("JMDict", ignoreCase = true)) return true
+    if (text.contains("Tatoeba", ignoreCase = true)) return true
+    if (text == "|") return true
+    if (text.equals("forms", ignoreCase = true)) return true
+    return false
 }
 
 private fun decodeSenseContentV2(obj: JSONObject): SenseContentData {
@@ -257,7 +289,7 @@ private fun decodeSenseContentV2(obj: JSONObject): SenseContentData {
                 for (defIndex in 0 until defsArray.length()) {
                     add(defsArray.getString(defIndex))
                 }
-            }
+            }.filterNot(::isJunkDefinition)
             if (defs.isNotEmpty()) {
                 add(
                     SenseBlock(
@@ -288,7 +320,7 @@ private fun parseLegacyGlossesArray(json: String): SenseContentData {
         for (index in 0 until array.length()) {
             addAll(parseLegacyGlossLine(array.optString(index)))
         }
-    }.filterNot(::isJunkLine)
+    }.filterNot(::isJunkDefinition)
 
     if (lines.isEmpty()) return SenseContentData()
 
@@ -367,17 +399,6 @@ private fun parseLegacyGlossLine(raw: String): List<String> {
     return listOfNotNull(trimmed.takeIf { it.isNotBlank() })
 }
 
-private fun isJunkLine(line: String): Boolean {
-    val text = line.trim()
-    if (text.isBlank()) return true
-    if (text.matches(Regex("\\[\\d+\\]"))) return true
-    if (text.equals("JMdict", ignoreCase = true)) return true
-    if (text.contains("Tatoeba", ignoreCase = true)) return true
-    if (text == "|") return true
-    if (text.equals("forms", ignoreCase = true)) return true
-    return false
-}
-
 private val legacyPosTokens = setOf(
     "noun", "suru", "transitive", "intransitive", "na-adj", "adj-i", "adj-na",
     "adverb", "verb", "interjection", "prefix", "suffix", "counter", "expression",
@@ -395,7 +416,7 @@ private fun splitLegacyPosAndDefinitions(lines: List<String>): Pair<List<String>
             pos += token
         } else {
             seenDefinition = true
-            if (!isJunkLine(token)) {
+            if (!isJunkDefinition(token)) {
                 definitions += token
             }
         }

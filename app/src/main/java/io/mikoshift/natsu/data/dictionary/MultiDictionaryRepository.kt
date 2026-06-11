@@ -11,27 +11,40 @@ class MultiDictionaryRepository(
     override suspend fun lookup(surface: String, lemma: String, reading: String): DictionaryEntry? {
         if (!localStore.hasEnabledDictionaries()) return null
 
-        val queries = buildList {
-            add(surface)
-            add(lemma)
-            if (reading.isNotBlank()) add(reading)
-        }.distinct().filter { it.isNotBlank() && it != "*" }
+        val queries = buildLookupQueries(surface, lemma, reading)
 
         if (queries.isEmpty()) return null
 
         val rows = localStore.lookupTerms(queries)
         if (rows.isEmpty()) return null
 
-        val senses = rows.map { row ->
-            val content = parseSenseContentJson(row.glossesJson)
-            DictionarySense(
-                dictionaryTitle = row.dictionaryTitle,
-                kanji = listOf(row.expression),
-                readings = listOf(row.reading),
-                partsOfSpeech = content.partsOfSpeech,
-                senseBlocks = content.senseBlocks,
+        val senses = rows
+            .sortedWith(
+                compareBy<TermLookupRow> { row ->
+                    termMatchPriority(
+                        expression = row.expression,
+                        reading = row.reading,
+                        surface = surface,
+                        lemma = lemma,
+                        queryReading = reading,
+                    )
+                }.thenBy { it.dictionaryPriority }
+                    .thenByDescending { it.score },
             )
-        }
+            .mapNotNull { row ->
+                val content = parseSenseContentJson(row.glossesJson)
+                if (!content.hasContent()) return@mapNotNull null
+
+                DictionarySense(
+                    dictionaryTitle = row.dictionaryTitle,
+                    kanji = listOf(row.expression),
+                    readings = listOf(row.reading),
+                    partsOfSpeech = content.partsOfSpeech,
+                    senseBlocks = content.senseBlocks,
+                )
+            }
+
+        if (senses.isEmpty()) return null
 
         return DictionaryEntry(
             querySurface = surface,

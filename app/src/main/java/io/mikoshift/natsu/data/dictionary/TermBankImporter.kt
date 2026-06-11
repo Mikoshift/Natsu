@@ -93,15 +93,17 @@ class TermBankImporter {
         val reading = entry.optString(1)
         val score = entry.optInt(4, 0)
         val glossary = entry.opt(5)
-        val senseContent = when (glossary) {
-            is JSONArray -> extractSenseContentFromGlossary(glossary)
-            is String -> SenseContentData(
-                senseBlocks = listOf(
-                    SenseBlock(definitions = listOf(glossary)),
-                ),
-            )
-            else -> extractLegacySenseContent(entry)
-        }
+        val senseContent = sanitizeSenseContent(
+            when (glossary) {
+                is JSONArray -> extractSenseContentFromGlossary(glossary)
+                is String -> SenseContentData(
+                    senseBlocks = listOf(
+                        SenseBlock(definitions = listOf(glossary)),
+                    ),
+                )
+                else -> extractLegacySenseContent(entry)
+            },
+        )
         if (expression.isBlank() || !senseContent.hasContent()) return null
         return TermRecord(
             dictionaryId = catalogId,
@@ -154,7 +156,7 @@ class TermBankImporter {
         val definitions = buildList {
             for (index in 5 until entry.length()) {
                 val item = entry.opt(index)
-                if (item is String && item.isNotBlank()) {
+                if (item is String && item.isNotBlank() && !isJunkDefinition(item)) {
                     add(item)
                 }
             }
@@ -175,11 +177,17 @@ class TermBankImporter {
         for (index in 0 until glossary.length()) {
             result = result.merge(
                 when (val item = glossary.get(index)) {
-                    is String -> SenseContentData(
-                        senseBlocks = listOf(
-                            SenseBlock(definitions = listOf(item)),
-                        ),
-                    )
+                    is String -> {
+                        if (isJunkDefinition(item)) {
+                            SenseContentData()
+                        } else {
+                            SenseContentData(
+                                senseBlocks = listOf(
+                                    SenseBlock(definitions = listOf(item)),
+                                ),
+                            )
+                        }
+                    }
                     is JSONObject -> extractSenseContentFromObject(item)
                     else -> SenseContentData()
                 },
@@ -192,7 +200,7 @@ class TermBankImporter {
         return when (item.optString("type")) {
             "text" -> {
                 val text = item.optString("text").trim()
-                if (text.isBlank()) {
+                if (text.isBlank() || isJunkDefinition(text)) {
                     SenseContentData()
                 } else {
                     SenseContentData(
