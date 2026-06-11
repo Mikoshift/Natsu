@@ -68,7 +68,10 @@ class AppContainer(context: Context) {
                     modelClass.isAssignableFrom(DictionariesViewModel::class.java) ->
                         DictionariesViewModel(dictionaryManagerRepository) as T
                     modelClass.isAssignableFrom(SettingsViewModel::class.java) ->
-                        SettingsViewModel(readerSettingsStore) as T
+                        SettingsViewModel(
+                            readerSettingsStore = readerSettingsStore,
+                            textTokenizer = textTokenizer,
+                        ) as T
                     modelClass.isAssignableFrom(ReaderViewModel::class.java) ->
                         ReaderViewModel(
                             documentRepository = documentRepository,

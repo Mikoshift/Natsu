@@ -24,15 +24,17 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.mikoshift.natsu.R
+import io.mikoshift.natsu.domain.model.FuriganaMode
 import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.domain.model.ReaderTheme
+import io.mikoshift.natsu.ui.reader.TokenizedParagraph
 import io.mikoshift.natsu.ui.shell.LocalDrawerOpen
 import io.mikoshift.natsu.ui.theme.ReaderThemeWrapper
 import kotlin.math.roundToInt
@@ -75,7 +77,10 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
-            ReaderPreviewCard(settings = settings)
+            ReaderPreviewCard(
+                settings = settings,
+                viewModel = viewModel,
+            )
 
             Text(
                 text = stringResource(R.string.settings_reader_section),
@@ -85,6 +90,11 @@ fun SettingsScreen(
             ThemeSelector(
                 selectedTheme = settings.theme,
                 onThemeSelected = viewModel::setTheme,
+            )
+
+            FuriganaSelector(
+                selectedMode = settings.furiganaMode,
+                onModeSelected = viewModel::setFuriganaMode,
             )
 
             FontSizeSlider(
@@ -103,8 +113,16 @@ fun SettingsScreen(
 @Composable
 private fun ReaderPreviewCard(
     settings: ReaderSettings,
+    viewModel: SettingsViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val previewSample = stringResource(R.string.settings_preview_sample)
+        .lineSequence()
+        .first()
+    val previewTokens = remember(previewSample) {
+        viewModel.tokenizeForPreview(previewSample)
+    }
+
     Card(modifier = modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp)) {
             Text(
@@ -113,13 +131,10 @@ private fun ReaderPreviewCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             ReaderThemeWrapper(settings = settings) {
-                Text(
-                    text = stringResource(R.string.settings_preview_sample),
-                    style = MaterialTheme.typography.bodyLarge.copy(
-                        fontSize = settings.fontSizeSp.sp,
-                        lineHeight = settings.fontSizeSp.sp * settings.lineSpacingMultiplier,
-                    ),
-                    color = MaterialTheme.colorScheme.onBackground,
+                TokenizedParagraph(
+                    tokens = previewTokens,
+                    settings = settings,
+                    onWordClick = {},
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 12.dp)
@@ -128,6 +143,43 @@ private fun ReaderPreviewCard(
                             shape = RoundedCornerShape(8.dp),
                         )
                         .padding(12.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FuriganaSelector(
+    selectedMode: FuriganaMode,
+    onModeSelected: (FuriganaMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = stringResource(R.string.settings_furigana),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            FuriganaMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = selectedMode == mode,
+                    onClick = { onModeSelected(mode) },
+                    label = {
+                        Text(
+                            text = when (mode) {
+                                FuriganaMode.OFF -> stringResource(R.string.settings_furigana_off)
+                                FuriganaMode.ALWAYS -> stringResource(R.string.settings_furigana_always)
+                            },
+                        )
+                    },
                 )
             }
         }

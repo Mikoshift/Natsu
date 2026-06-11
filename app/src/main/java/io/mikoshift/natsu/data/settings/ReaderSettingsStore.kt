@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import io.mikoshift.natsu.domain.model.FuriganaMode
 import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.domain.model.ReaderTheme
 import kotlinx.coroutines.flow.Flow
@@ -26,6 +27,9 @@ class ReaderSettingsStore(
             theme = preferences[KEY_THEME]?.let { name ->
                 runCatching { ReaderTheme.valueOf(name) }.getOrDefault(ReaderTheme.LIGHT)
             } ?: ReaderTheme.LIGHT,
+            furiganaMode = preferences[KEY_FURIGANA_MODE]?.let { name ->
+                runCatching { FuriganaMode.valueOf(name) }.getOrDefault(FuriganaMode.OFF)
+            } ?: FuriganaMode.OFF,
         )
     }
 
@@ -47,9 +51,16 @@ class ReaderSettingsStore(
         }
     }
 
+    suspend fun updateFuriganaMode(furiganaMode: FuriganaMode) {
+        context.readerSettingsDataStore.edit { preferences ->
+            preferences[KEY_FURIGANA_MODE] = furiganaMode.name
+        }
+    }
+
     private companion object {
         val KEY_FONT_SIZE = floatPreferencesKey("font_size_sp")
         val KEY_LINE_SPACING = floatPreferencesKey("line_spacing")
         val KEY_THEME = stringPreferencesKey("reader_theme")
+        val KEY_FURIGANA_MODE = stringPreferencesKey("furigana_mode")
     }
 }
