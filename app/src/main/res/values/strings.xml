@@ -24,7 +24,7 @@
     <string name="settings_title">Settings</string>
     <string name="settings_reader_section">Reader</string>
     <string name="settings_preview_label">Preview</string>
-    <string name="settings_preview_sample">吾輩は猫である。名前はまだ無い。</string>
+    <string name="settings_preview_sample">吾輩は猫である。名前はまだ無い。\nどこで生れたかとんと見当がつかぬ。\n何でも薄暗いじめじめした所でニャーニャー泣いていた事だけは記憶している。\n吾輩はここで始めて人間というものを見た。</string>
     <string name="settings_theme">Reading theme</string>
     <string name="settings_theme_light">Light</string>
     <string name="settings_theme_dark">Dark</string>
