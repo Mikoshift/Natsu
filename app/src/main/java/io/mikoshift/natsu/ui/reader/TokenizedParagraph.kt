@@ -13,18 +13,22 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -35,6 +39,8 @@ import io.mikoshift.natsu.domain.model.TextToken
 private const val WORD_ANNOTATION_TAG = "word"
 private const val FURIGANA_FONT_SCALE = 0.55f
 private const val FURIGANA_SLOT_RATIO = 0.65f
+private val SearchHighlightColor = Color(0xFFFFD54F)
+private val SearchHighlightTextColor = Color(0xFF3E2723)
 
 @Composable
 fun TokenizedParagraph(
@@ -42,7 +48,20 @@ fun TokenizedParagraph(
     settings: ReaderSettings,
     onWordClick: (TextToken) -> Unit,
     modifier: Modifier = Modifier,
+    highlightRange: IntRange? = null,
+    onHighlightPositioned: ((centerY: Float) -> Unit)? = null,
 ) {
+    if (highlightRange != null) {
+        PlainTokenizedParagraph(
+            tokens = tokens,
+            settings = settings,
+            onWordClick = onWordClick,
+            highlightRange = highlightRange,
+            onHighlightPositioned = onHighlightPositioned,
+            modifier = modifier,
+        )
+        return
+    }
     when (settings.furiganaMode) {
         FuriganaMode.OFF -> PlainTokenizedParagraph(
             tokens = tokens,
@@ -76,22 +95,51 @@ private fun PlainTokenizedParagraph(
     settings: ReaderSettings,
     onWordClick: (TextToken) -> Unit,
     modifier: Modifier = Modifier,
+    highlightRange: IntRange? = null,
+    onHighlightPositioned: ((centerY: Float) -> Unit)? = null,
 ) {
     val textStyle = readerTextStyle(settings)
-    val annotatedString = remember(tokens) {
+    val highlightStyle = SpanStyle(
+        background = SearchHighlightColor,
+        color = SearchHighlightTextColor,
+    )
+    val annotatedString = remember(tokens, highlightRange) {
         buildAnnotatedString {
+            var offset = 0
             tokens.forEachIndexed { index, token ->
-                if (token.isClickable) {
-                    pushStringAnnotation(tag = WORD_ANNOTATION_TAG, annotation = index.toString())
-                    append(token.surface)
-                    pop()
+                val tokenStart = offset
+                val tokenEnd = tokenStart + token.surface.length
+                val style = if (highlightRange?.overlaps(tokenStart until tokenEnd) == true) {
+                    highlightStyle
                 } else {
-                    append(token.surface)
+                    SpanStyle()
                 }
+                withStyle(style) {
+                    if (token.isClickable) {
+                        pushStringAnnotation(tag = WORD_ANNOTATION_TAG, annotation = index.toString())
+                        append(token.surface)
+                        pop()
+                    } else {
+                        append(token.surface)
+                    }
+                }
+                offset = tokenEnd
             }
         }
     }
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+
+    LaunchedEffect(textLayoutResult, highlightRange, onHighlightPositioned) {
+        val layout = textLayoutResult ?: return@LaunchedEffect
+        val range = highlightRange ?: return@LaunchedEffect
+        val callback = onHighlightPositioned ?: return@LaunchedEffect
+        if (layout.layoutInput.text.isEmpty()) return@LaunchedEffect
+        val start = range.first.coerceIn(0, layout.layoutInput.text.lastIndex)
+        val end = range.last.coerceIn(0, layout.layoutInput.text.lastIndex)
+        val top = layout.getBoundingBox(start).top
+        val bottom = layout.getBoundingBox(end).bottom
+        callback((top + bottom) / 2f)
+    }
 
     Text(
         text = annotatedString,
@@ -158,6 +206,9 @@ private fun FuriganaTokenizedParagraph(
         }
     }
 }
+
+private fun IntRange.overlaps(other: IntRange): Boolean =
+    first <= other.last && last >= other.first
 
 @Composable
 private fun FuriganaToken(

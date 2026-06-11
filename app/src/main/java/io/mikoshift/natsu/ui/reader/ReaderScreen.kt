@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -20,6 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +34,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.mikoshift.natsu.R
 import io.mikoshift.natsu.ui.theme.ReaderThemeWrapper
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -58,6 +64,24 @@ fun ReaderScreen(
         }
     }
 
+    var highlightCenterY by remember { mutableStateOf<Float?>(null) }
+
+    LaunchedEffect(contentReady, uiState.searchHighlight?.scrollRequestId) {
+        val highlight = uiState.searchHighlight ?: return@LaunchedEffect
+        if (!contentReady) return@LaunchedEffect
+
+        highlightCenterY = null
+        listState.scrollToItem(
+            highlight.paragraphIndex.coerceAtMost(uiState.paragraphs.lastIndex),
+        )
+        val centerY = snapshotFlow { highlightCenterY }
+            .filterNotNull()
+            .first()
+        val viewportHeight = listState.layoutInfo.viewportSize.height
+        val scrollOffset = (centerY - viewportHeight / 2f).toInt().coerceAtLeast(0)
+        listState.animateScrollToItem(highlight.paragraphIndex, scrollOffset)
+    }
+
     LaunchedEffect(contentReady, listState) {
         if (!contentReady) return@LaunchedEffect
         snapshotFlow { listState.firstVisibleItemIndex }
@@ -82,21 +106,45 @@ fun ReaderScreen(
             topBar = {
                 TopAppBar(
                     title = {
-                        Text(
-                            text = uiState.document?.title ?: stringResource(R.string.reader_title),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                        if (uiState.searchActive) {
+                            ReaderSearchBar(
+                                query = uiState.searchQuery,
+                                matchIndex = uiState.searchMatchIndex,
+                                matchCount = uiState.searchMatchOffsets.size,
+                                onQueryChange = viewModel::updateSearchQuery,
+                                onPreviousMatch = viewModel::goToPreviousSearchMatch,
+                                onNextMatch = viewModel::goToNextSearchMatch,
+                                onClose = viewModel::closeSearch,
+                            )
+                        } else {
+                            Text(
+                                text = uiState.document?.title ?: stringResource(R.string.reader_title),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     },
                     navigationIcon = {
-                        IconButton(onClick = {
-                            viewModel.flushReadingPosition(listState.firstVisibleItemIndex)
-                            onBack()
-                        }) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.back),
-                            )
+                        if (!uiState.searchActive) {
+                            IconButton(onClick = {
+                                viewModel.flushReadingPosition(listState.firstVisibleItemIndex)
+                                onBack()
+                            }) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.ArrowBack,
+                                    contentDescription = stringResource(R.string.back),
+                                )
+                            }
+                        }
+                    },
+                    actions = {
+                        if (!uiState.searchActive && contentReady) {
+                            IconButton(onClick = viewModel::openSearch) {
+                                Icon(
+                                    Icons.Default.Search,
+                                    contentDescription = stringResource(R.string.reader_search),
+                                )
+                            }
                         }
                     },
                 )
@@ -127,11 +175,19 @@ fun ReaderScreen(
                             itemsIndexed(
                                 items = uiState.paragraphs,
                                 key = { index, _ -> index },
-                            ) { _, tokens ->
+                            ) { index, tokens ->
+                                val highlight = uiState.searchHighlight
+                                    ?.takeIf { it.paragraphIndex == index }
                                 TokenizedParagraph(
                                     tokens = tokens,
                                     settings = readerSettings,
                                     onWordClick = viewModel::onWordClicked,
+                                    highlightRange = highlight?.range,
+                                    onHighlightPositioned = if (highlight != null) {
+                                        { y -> highlightCenterY = y }
+                                    } else {
+                                        null
+                                    },
                                 )
                             }
                         }

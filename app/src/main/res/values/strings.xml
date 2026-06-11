@@ -5,6 +5,13 @@
     <string name="library_empty_title">No books</string>
     <string name="library_empty_message">Tap + to import a UTF-8 .txt file</string>
     <string name="reader_title">Reader</string>
+    <string name="reader_search">Search in text</string>
+    <string name="reader_search_hint">Search…</string>
+    <string name="reader_search_close">Close search</string>
+    <string name="reader_search_previous">Previous match</string>
+    <string name="reader_search_next">Next match</string>
+    <string name="reader_search_counter">%1$d / %2$d</string>
+    <string name="reader_search_no_results">No matches</string>
     <string name="back">Back</string>
     <string name="dictionary_not_found">Entry not found</string>
     <string name="dictionary_not_installed_hint">Install a dictionary from the Dictionaries menu</string>

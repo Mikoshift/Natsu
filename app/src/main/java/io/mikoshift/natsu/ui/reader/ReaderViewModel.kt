@@ -10,6 +10,8 @@ import io.mikoshift.natsu.domain.repository.DictionaryRepository
 import io.mikoshift.natsu.domain.repository.DocumentRepository
 import io.mikoshift.natsu.domain.repository.TextTokenizer
 import io.mikoshift.natsu.data.reader.buildParagraphLayout
+import io.mikoshift.natsu.data.reader.findMatchOffsets
+import io.mikoshift.natsu.data.reader.localHighlightRange
 import io.mikoshift.natsu.data.reader.paragraphIndexForCharOffset
 import io.mikoshift.natsu.data.settings.ReaderSettingsStore
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +36,12 @@ sealed interface WordLookupState {
     ) : WordLookupState
 }
 
+data class SearchHighlight(
+    val paragraphIndex: Int,
+    val range: IntRange,
+    val scrollRequestId: Long,
+)
+
 data class ReaderUiState(
     val document: Document? = null,
     val paragraphs: List<List<TextToken>> = emptyList(),
@@ -42,6 +50,11 @@ data class ReaderUiState(
     val scrollToIndex: Int = 0,
     val paragraphStartOffsets: List<Int> = emptyList(),
     val wordLookup: WordLookupState = WordLookupState.Hidden,
+    val searchActive: Boolean = false,
+    val searchQuery: String = "",
+    val searchMatchOffsets: List<Int> = emptyList(),
+    val searchMatchIndex: Int = 0,
+    val searchHighlight: SearchHighlight? = null,
 )
 
 class ReaderViewModel(
@@ -64,6 +77,9 @@ class ReaderViewModel(
     private var lastSavedCharOffset: Int = -1
     private var lastSavedParagraphIndex: Int = -1
     private var saveJob: Job? = null
+    private var rawText: String = ""
+    private var searchJob: Job? = null
+    private var searchScrollRequestId: Long = 0L
 
     fun loadDocument(documentId: String) {
         viewModelScope.launch {
@@ -79,6 +95,7 @@ class ReaderViewModel(
 
             documentRepository.readDocumentText(document)
                 .onSuccess { text ->
+                    rawText = text
                     documentRepository.ensureCharCount(documentId, text.length)
                     val layout = buildParagraphLayout(text)
                     val tokenized = withContext(Dispatchers.Default) {
@@ -146,6 +163,107 @@ class ReaderViewModel(
 
     fun dismissWordLookup() {
         _uiState.update { it.copy(wordLookup = WordLookupState.Hidden) }
+    }
+
+    fun openSearch() {
+        _uiState.update {
+            it.copy(
+                searchActive = true,
+                searchQuery = "",
+                searchMatchOffsets = emptyList(),
+                searchMatchIndex = 0,
+                searchHighlight = null,
+            )
+        }
+    }
+
+    fun closeSearch() {
+        searchJob?.cancel()
+        _uiState.update {
+            it.copy(
+                searchActive = false,
+                searchQuery = "",
+                searchMatchOffsets = emptyList(),
+                searchMatchIndex = 0,
+                searchHighlight = null,
+            )
+        }
+    }
+
+    fun updateSearchQuery(query: String) {
+        _uiState.update {
+            it.copy(
+                searchQuery = query,
+                searchMatchIndex = 0,
+                searchHighlight = null,
+                searchMatchOffsets = if (query.isEmpty()) emptyList() else it.searchMatchOffsets,
+            )
+        }
+        searchJob?.cancel()
+        if (query.isEmpty()) return
+        searchJob = viewModelScope.launch {
+            delay(SEARCH_DEBOUNCE_MS)
+            val matches = withContext(Dispatchers.Default) {
+                findMatchOffsets(rawText, query)
+            }
+            _uiState.update { state ->
+                if (state.searchQuery != query) return@update state
+                state.copy(
+                    searchMatchOffsets = matches,
+                    searchMatchIndex = 0,
+                    searchHighlight = highlightForMatch(matches, matchIndex = 0, query),
+                )
+            }
+        }
+    }
+
+    fun goToNextSearchMatch() {
+        navigateSearchMatch(delta = 1)
+    }
+
+    fun goToPreviousSearchMatch() {
+        navigateSearchMatch(delta = -1)
+    }
+
+    private fun navigateSearchMatch(delta: Int) {
+        val state = _uiState.value
+        val matches = state.searchMatchOffsets
+        if (matches.isEmpty()) return
+
+        val nextIndex = (state.searchMatchIndex + delta).mod(matches.size)
+        _uiState.update {
+            it.copy(
+                searchMatchIndex = nextIndex,
+                searchHighlight = highlightForMatch(
+                    matches = matches,
+                    matchIndex = nextIndex,
+                    query = state.searchQuery,
+                ),
+            )
+        }
+    }
+
+    private fun highlightForMatch(
+        matches: List<Int>,
+        matchIndex: Int,
+        query: String,
+    ): SearchHighlight? {
+        val matchOffset = matches.getOrNull(matchIndex) ?: return null
+        val paragraphIndex = paragraphIndexForMatch(matchOffset)
+        val paragraphStart = _uiState.value.paragraphStartOffsets.getOrElse(paragraphIndex) { 0 }
+        return SearchHighlight(
+            paragraphIndex = paragraphIndex,
+            range = localHighlightRange(matchOffset, query.length, paragraphStart),
+            scrollRequestId = ++searchScrollRequestId,
+        )
+    }
+
+    private fun paragraphIndexForMatch(charOffset: Int): Int {
+        val offsets = _uiState.value.paragraphStartOffsets
+        if (offsets.isEmpty()) return 0
+        if (charOffset <= 0) return 0
+        val index = offsets.indexOfLast { it <= charOffset }
+        return if (index >= 0) index else 0
     }
 
     fun saveReadingPosition(paragraphIndex: Int, immediate: Boolean = false) {
@@ -223,5 +341,6 @@ class ReaderViewModel(
 
     companion object {
         private const val READING_POSITION_SAVE_DELAY_MS = 400L
+        private const val SEARCH_DEBOUNCE_MS = 250L
     }
 }
