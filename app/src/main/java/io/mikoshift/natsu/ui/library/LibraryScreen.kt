@@ -88,7 +88,7 @@ fun LibraryScreen(
     val importLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
     ) { uri: Uri? ->
-        uri?.let { viewModel.importTextFile(it, null) }
+        uri?.let { viewModel.importBook(it, null) }
     }
 
     LaunchedEffect(uiState.errorMessage) {

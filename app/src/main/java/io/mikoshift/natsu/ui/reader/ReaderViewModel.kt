@@ -8,8 +8,8 @@ import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.domain.model.TextToken
 import io.mikoshift.natsu.domain.repository.DictionaryRepository
 import io.mikoshift.natsu.domain.repository.DocumentRepository
+import io.mikoshift.natsu.domain.repository.ReadingContentRepository
 import io.mikoshift.natsu.domain.repository.TextTokenizer
-import io.mikoshift.natsu.data.reader.buildParagraphLayout
 import io.mikoshift.natsu.data.reader.findMatchOffsets
 import io.mikoshift.natsu.data.reader.localHighlightRange
 import io.mikoshift.natsu.data.reader.paragraphIndexForCharOffset
@@ -59,6 +59,7 @@ data class ReaderUiState(
 
 class ReaderViewModel(
     private val documentRepository: DocumentRepository,
+    private val readingContentRepository: ReadingContentRepository,
     private val dictionaryRepository: DictionaryRepository,
     private val textTokenizer: TextTokenizer,
     readerSettingsStore: ReaderSettingsStore,
@@ -93,11 +94,10 @@ class ReaderViewModel(
                 return@launch
             }
 
-            documentRepository.readDocumentText(document)
-                .onSuccess { text ->
-                    rawText = text
-                    documentRepository.ensureCharCount(documentId, text.length)
-                    val layout = buildParagraphLayout(text)
+            readingContentRepository.loadLayout(documentId)
+                .onSuccess { layout ->
+                    rawText = layout.canonicalText
+                    documentRepository.ensureCharCount(documentId, layout.canonicalText.length)
                     val tokenized = withContext(Dispatchers.Default) {
                         textTokenizer.tokenizeParagraphs(layout.paragraphs)
                     }
@@ -118,7 +118,7 @@ class ReaderViewModel(
                             paragraphs = tokenized,
                             isLoading = false,
                             scrollToIndex = scrollIndex,
-                            paragraphStartOffsets = layout.startOffsets,
+                            paragraphStartOffsets = layout.paragraphStartOffsets,
                         )
                     }
                 }

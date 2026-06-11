@@ -1,6 +1,7 @@
 package io.mikoshift.natsu.data.reader
 
 import io.mikoshift.natsu.domain.model.Document
+import io.mikoshift.natsu.domain.model.reading.BookFormat
 import io.mikoshift.natsu.domain.model.readingProgressPercent
 import org.junit.Assert.assertEquals
 import org.junit.Test
@@ -34,7 +35,8 @@ class ParagraphLayoutTest {
         val document = Document(
             id = "1",
             title = "Test",
-            filePath = "/tmp/test.txt",
+            storagePath = "/tmp/book-1",
+            sourceFormat = BookFormat.PlainText,
             importedAt = 0L,
             charCount = 200,
             lastReadCharOffset = 50,

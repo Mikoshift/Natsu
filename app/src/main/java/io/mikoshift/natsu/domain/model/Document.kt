@@ -1,9 +1,12 @@
 package io.mikoshift.natsu.domain.model
 
+import io.mikoshift.natsu.domain.model.reading.BookFormat
+
 data class Document(
     val id: String,
     val title: String,
-    val filePath: String,
+    val storagePath: String,
+    val sourceFormat: BookFormat,
     val importedAt: Long,
     val charCount: Int,
     val lastReadCharOffset: Int,

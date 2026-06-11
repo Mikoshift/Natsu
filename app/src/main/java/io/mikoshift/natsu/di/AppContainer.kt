@@ -4,6 +4,11 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
+import io.mikoshift.natsu.data.book.BookImportCoordinator
+import io.mikoshift.natsu.data.book.BookStorage
+import io.mikoshift.natsu.data.book.import.PlainTextBookImporter
+import io.mikoshift.natsu.data.book.load.ManifestReadingContentLoader
+import io.mikoshift.natsu.data.book.load.PlainTextFormatLoader
 import io.mikoshift.natsu.data.dictionary.DictionaryCatalogLoader
 import io.mikoshift.natsu.data.dictionary.DictionaryDownloadManager
 import io.mikoshift.natsu.data.dictionary.DictionaryLocalStore
@@ -13,11 +18,13 @@ import io.mikoshift.natsu.data.dictionary.TermBankImporter
 import io.mikoshift.natsu.data.local.DocumentLocalStore
 import io.mikoshift.natsu.data.settings.ReaderSettingsStore
 import io.mikoshift.natsu.data.reader.KuromojiTokenizer
-import io.mikoshift.natsu.data.reader.TextFileImporter
+import io.mikoshift.natsu.data.reader.ReadingLayoutBuilder
 import io.mikoshift.natsu.data.repository.DocumentRepositoryImpl
+import io.mikoshift.natsu.data.repository.ReadingContentRepositoryImpl
 import io.mikoshift.natsu.domain.repository.DictionaryManagerRepository
 import io.mikoshift.natsu.domain.repository.DictionaryRepository
 import io.mikoshift.natsu.domain.repository.DocumentRepository
+import io.mikoshift.natsu.domain.repository.ReadingContentRepository
 import io.mikoshift.natsu.domain.repository.TextTokenizer
 import io.mikoshift.natsu.ui.dictionaries.DictionariesViewModel
 import io.mikoshift.natsu.ui.library.LibraryViewModel
@@ -28,7 +35,24 @@ class AppContainer(context: Context) {
     private val appContext = context.applicationContext
 
     private val documentLocalStore: DocumentLocalStore by lazy { DocumentLocalStore(appContext) }
-    private val textFileImporter: TextFileImporter by lazy { TextFileImporter(appContext) }
+    private val bookStorage: BookStorage by lazy { BookStorage(appContext) }
+    private val bookImportCoordinator: BookImportCoordinator by lazy {
+        BookImportCoordinator(
+            importers = listOf(
+                PlainTextBookImporter(
+                    context = appContext,
+                    bookStorage = bookStorage,
+                ),
+            ),
+        )
+    }
+    private val manifestReadingContentLoader: ManifestReadingContentLoader by lazy {
+        ManifestReadingContentLoader(
+            bookStorage = bookStorage,
+            formatLoaders = listOf(PlainTextFormatLoader()),
+        )
+    }
+    private val readingLayoutBuilder: ReadingLayoutBuilder by lazy { ReadingLayoutBuilder() }
     private val dictionaryLocalStore: DictionaryLocalStore by lazy { DictionaryLocalStore(appContext) }
     private val dictionaryCatalogLoader: DictionaryCatalogLoader by lazy { DictionaryCatalogLoader(appContext) }
     private val dictionaryDownloadManager: DictionaryDownloadManager by lazy { DictionaryDownloadManager() }
@@ -38,7 +62,18 @@ class AppContainer(context: Context) {
     val documentRepository: DocumentRepository by lazy {
         DocumentRepositoryImpl(
             documentLocalStore = documentLocalStore,
-            textFileImporter = textFileImporter,
+            bookImportCoordinator = bookImportCoordinator,
+            bookStorage = bookStorage,
+            manifestReadingContentLoader = manifestReadingContentLoader,
+            readingLayoutBuilder = readingLayoutBuilder,
+        )
+    }
+
+    val readingContentRepository: ReadingContentRepository by lazy {
+        ReadingContentRepositoryImpl(
+            documentLocalStore = documentLocalStore,
+            manifestReadingContentLoader = manifestReadingContentLoader,
+            readingLayoutBuilder = readingLayoutBuilder,
         )
     }
 
@@ -75,6 +110,7 @@ class AppContainer(context: Context) {
                     modelClass.isAssignableFrom(ReaderViewModel::class.java) ->
                         ReaderViewModel(
                             documentRepository = documentRepository,
+                            readingContentRepository = readingContentRepository,
                             dictionaryRepository = dictionaryRepository,
                             textTokenizer = textTokenizer,
                             readerSettingsStore = readerSettingsStore,

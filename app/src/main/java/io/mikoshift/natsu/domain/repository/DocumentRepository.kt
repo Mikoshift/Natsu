@@ -9,9 +9,7 @@ interface DocumentRepository {
 
     suspend fun getDocument(id: String): Document?
 
-    suspend fun importTextFile(uri: Uri, displayName: String?): Result<Document>
-
-    suspend fun readDocumentText(document: Document): Result<String>
+    suspend fun importBook(uri: Uri, displayName: String?): Result<Document>
 
     suspend fun renameDocument(id: String, title: String): Result<Unit>
 

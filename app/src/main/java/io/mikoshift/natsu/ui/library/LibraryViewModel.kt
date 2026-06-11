@@ -30,10 +30,10 @@ class LibraryViewModel(
     private val _uiState = MutableStateFlow(LibraryUiState())
     val uiState: StateFlow<LibraryUiState> = _uiState.asStateFlow()
 
-    fun importTextFile(uri: Uri, displayName: String?) {
+    fun importBook(uri: Uri, displayName: String?) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isImporting = true, errorMessage = null)
-            documentRepository.importTextFile(uri, displayName)
+            documentRepository.importBook(uri, displayName)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isImporting = false)
                 }

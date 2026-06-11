@@ -4,6 +4,7 @@ import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import io.mikoshift.natsu.domain.model.Document
+import io.mikoshift.natsu.domain.model.reading.BookFormat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -135,7 +136,8 @@ class DocumentLocalStore(context: Context) {
                 CREATE TABLE $TABLE (
                     id TEXT PRIMARY KEY NOT NULL,
                     title TEXT NOT NULL,
-                    file_path TEXT NOT NULL,
+                    storage_path TEXT NOT NULL,
+                    source_format TEXT NOT NULL,
                     imported_at INTEGER NOT NULL,
                     char_count INTEGER NOT NULL DEFAULT 0,
                     last_read_char_offset INTEGER NOT NULL DEFAULT 0,
@@ -146,26 +148,23 @@ class DocumentLocalStore(context: Context) {
         }
 
         override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-            if (oldVersion < 2) {
-                db.execSQL(
-                    "ALTER TABLE $TABLE ADD COLUMN char_count INTEGER NOT NULL DEFAULT 0",
-                )
-                db.execSQL(
-                    "ALTER TABLE $TABLE ADD COLUMN last_read_char_offset INTEGER NOT NULL DEFAULT 0",
-                )
+            if (oldVersion < 3) {
+                db.execSQL("DROP TABLE IF EXISTS $TABLE")
+                onCreate(db)
             }
         }
     }
 
     companion object {
         private const val DB_NAME = "natsu_documents.db"
-        private const val DB_VERSION = 2
+        private const val DB_VERSION = 3
         private const val TABLE = "documents"
 
         private val DOCUMENT_COLUMNS = arrayOf(
             "id",
             "title",
-            "file_path",
+            "storage_path",
+            "source_format",
             "imported_at",
             "char_count",
             "last_read_char_offset",
@@ -178,18 +177,20 @@ private fun android.database.Cursor.toDocument(): Document =
     Document(
         id = getString(0),
         title = getString(1),
-        filePath = getString(2),
-        importedAt = getLong(3),
-        charCount = getInt(4),
-        lastReadCharOffset = getInt(5),
-        lastReadParagraphIndex = getInt(6),
+        storagePath = getString(2),
+        sourceFormat = BookFormat.fromManifestValue(getString(3)),
+        importedAt = getLong(4),
+        charCount = getInt(5),
+        lastReadCharOffset = getInt(6),
+        lastReadParagraphIndex = getInt(7),
     )
 
 private fun Document.toContentValues(): android.content.ContentValues =
     android.content.ContentValues().apply {
         put("id", id)
         put("title", title)
-        put("file_path", filePath)
+        put("storage_path", storagePath)
+        put("source_format", sourceFormat.manifestValue)
         put("imported_at", importedAt)
         put("char_count", charCount)
         put("last_read_char_offset", lastReadCharOffset)

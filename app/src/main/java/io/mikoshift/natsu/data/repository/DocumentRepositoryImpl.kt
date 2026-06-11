@@ -1,18 +1,23 @@
 package io.mikoshift.natsu.data.repository
 
+import io.mikoshift.natsu.data.book.BookImportCoordinator
+import io.mikoshift.natsu.data.book.BookStorage
+import io.mikoshift.natsu.data.book.load.ManifestReadingContentLoader
 import io.mikoshift.natsu.data.local.DocumentLocalStore
-import io.mikoshift.natsu.data.reader.TextFileImporter
+import io.mikoshift.natsu.data.reader.ReadingLayoutBuilder
 import io.mikoshift.natsu.domain.model.Document
 import io.mikoshift.natsu.domain.repository.DocumentRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
-import java.io.File
 
 class DocumentRepositoryImpl(
     private val documentLocalStore: DocumentLocalStore,
-    private val textFileImporter: TextFileImporter,
+    private val bookImportCoordinator: BookImportCoordinator,
+    private val bookStorage: BookStorage,
+    private val manifestReadingContentLoader: ManifestReadingContentLoader,
+    private val readingLayoutBuilder: ReadingLayoutBuilder,
 ) : DocumentRepository {
 
     override fun observeDocuments(): Flow<List<Document>> = flow {
@@ -25,30 +30,29 @@ class DocumentRepositoryImpl(
     override suspend fun getDocument(id: String): Document? =
         documentLocalStore.getById(id)
 
-    override suspend fun importTextFile(
+    override suspend fun importBook(
         uri: android.net.Uri,
         displayName: String?,
     ): Result<Document> =
-        textFileImporter.import(uri, displayName).mapCatching { imported ->
-            val content = File(imported.filePath).readText(Charsets.UTF_8)
+        bookImportCoordinator.import(uri, displayName).mapCatching { imported ->
+            val readingBook = manifestReadingContentLoader.load(
+                documentId = imported.id,
+                storagePath = imported.storagePath,
+                title = imported.title,
+            ).getOrThrow()
+            val layout = readingLayoutBuilder.build(readingBook)
             val document = Document(
                 id = imported.id,
                 title = imported.title,
-                filePath = imported.filePath,
+                storagePath = imported.storagePath,
+                sourceFormat = imported.sourceFormat,
                 importedAt = imported.importedAt,
-                charCount = content.length,
+                charCount = layout.canonicalText.length,
                 lastReadCharOffset = 0,
                 lastReadParagraphIndex = 0,
             )
             documentLocalStore.insert(document)
             document
-        }
-
-    override suspend fun readDocumentText(document: Document): Result<String> =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                File(document.filePath).readText(Charsets.UTF_8)
-            }
         }
 
     override suspend fun renameDocument(id: String, title: String): Result<Unit> =
@@ -68,7 +72,7 @@ class DocumentRepositoryImpl(
             runCatching {
                 val document = documentLocalStore.getById(id)
                     ?: throw NoSuchElementException("Document not found")
-                File(document.filePath).delete()
+                bookStorage.deleteBookPackage(document.storagePath)
                 documentLocalStore.delete(id)
                 Unit
             }

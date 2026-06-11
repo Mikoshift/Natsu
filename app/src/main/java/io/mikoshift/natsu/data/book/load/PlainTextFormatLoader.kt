@@ -1,0 +1,31 @@
+package io.mikoshift.natsu.data.book.load
+
+import io.mikoshift.natsu.data.reader.buildParagraphLayout
+import io.mikoshift.natsu.domain.model.reading.BookFormat
+import io.mikoshift.natsu.domain.model.reading.ManifestSection
+import io.mikoshift.natsu.domain.model.reading.ReadingBlock
+import io.mikoshift.natsu.domain.model.reading.ReadingSection
+import io.mikoshift.natsu.domain.model.reading.TextSpan
+import java.io.File
+import java.nio.charset.StandardCharsets
+
+class PlainTextFormatLoader : FormatReadingLoader {
+    override val format: BookFormat = BookFormat.PlainText
+
+    override suspend fun loadSection(bookDir: File, section: ManifestSection): ReadingSection {
+        val contentFile = File(bookDir, section.path)
+        require(contentFile.exists()) {
+            "Section content not found: ${section.path}"
+        }
+        val text = contentFile.readText(StandardCharsets.UTF_8)
+        val layout = buildParagraphLayout(text)
+        val blocks = layout.paragraphs.map { paragraph ->
+            ReadingBlock.Paragraph(listOf(TextSpan(text = paragraph)))
+        }
+        return ReadingSection(
+            id = section.id,
+            title = section.title,
+            blocks = blocks,
+        )
+    }
+}

@@ -1,9 +1,9 @@
 <resources>
     <string name="app_name">Natsu</string>
     <string name="library_title">Library</string>
-    <string name="import_text">Import text</string>
+    <string name="import_text">Import book</string>
     <string name="library_empty_title">No books</string>
-    <string name="library_empty_message">Tap + to import a UTF-8 .txt file</string>
+    <string name="library_empty_message">Tap + to import a UTF-8 text file</string>
     <string name="reader_title">Reader</string>
     <string name="reader_search">Search in text</string>
     <string name="reader_search_hint">Search…</string>
