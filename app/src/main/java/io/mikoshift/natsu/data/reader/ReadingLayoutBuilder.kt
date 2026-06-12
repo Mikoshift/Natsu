@@ -4,6 +4,17 @@ import io.mikoshift.natsu.domain.model.reading.ReadingBlock
 import io.mikoshift.natsu.domain.model.reading.ReadingBook
 import io.mikoshift.natsu.domain.model.reading.ReadingLayout
 
+/**
+ * Builds [ReadingLayout] from [ReadingBook] IR.
+ *
+ * Inclusion rules:
+ * - [ReadingBlock.Paragraph]: included when joined span text is non-empty.
+ * - [ReadingBlock.Heading]: included when text is not blank (rendered as a paragraph row).
+ * - [ReadingBlock.Image]: skipped (not yet represented in layout).
+ *
+ * [ReadingLayout.canonicalText] is built by appending each included block separated by `\n`.
+ * [ReadingLayout.sectionBoundaries] records the paragraph index where each section after the first begins.
+ */
 class ReadingLayoutBuilder {
     fun build(book: ReadingBook): ReadingLayout {
         val paragraphs = mutableListOf<String>()
@@ -53,6 +64,7 @@ class ReadingLayoutBuilder {
     }
 }
 
+/** Maps a [ReadingLayout.canonicalText] offset to the containing paragraph index. */
 fun ReadingLayout.paragraphIndexForCharOffset(charOffset: Int): Int {
     if (paragraphs.isEmpty()) return 0
     if (charOffset <= 0) return 0
