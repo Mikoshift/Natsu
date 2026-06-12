@@ -47,10 +47,11 @@ fun ReaderWebView(
             documentId = documentId,
         )
     }
-    val jsBridge = remember(onWordTap, onScrollProgress, onChapterReady) {
+    val jsBridge = remember(onWordTap, onScrollProgress, onChapterReady, controller) {
         ReaderJsBridge(
             onWordTap = onWordTap,
             onScrollProgress = onScrollProgress,
+            onBridgeReady = { controller.onBridgeReady() },
             onChapterReady = onChapterReady,
         )
     }
@@ -96,8 +97,8 @@ fun ReaderWebView(
                 settings.allowFileAccess = false
                 settings.allowContentAccess = false
                 settings.loadsImagesAutomatically = true
-                settings.useWideViewPort = true
-                settings.loadWithOverviewMode = true
+                settings.useWideViewPort = false
+                settings.loadWithOverviewMode = false
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
                 if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
                     WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
@@ -105,7 +106,7 @@ fun ReaderWebView(
                 addJavascriptInterface(jsBridge, ReaderBridgeContract.JS_INTERFACE_NAME)
                 webViewClient = assetLoader.createWebViewClient(
                     onChapterLink = onChapterLink,
-                    onPageFinished = { controller.injectReaderAssets(onComplete = {}) },
+                    onPageFinished = { controller.injectReaderAssets() },
                 )
                 controller.attach(this)
             }
@@ -120,8 +121,7 @@ fun ReaderWebView(
         controller.loadChapter(url)
     }
 
-    LaunchedEffect(readerSettings, chapterUrl) {
-        if (chapterUrl == null) return@LaunchedEffect
+    LaunchedEffect(readerSettings) {
         controller.applyTheme(readerSettings)
     }
 

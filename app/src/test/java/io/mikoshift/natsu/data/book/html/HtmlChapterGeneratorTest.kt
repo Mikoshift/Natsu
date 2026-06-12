@@ -1,5 +1,6 @@
 package io.mikoshift.natsu.data.book.html
 
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -11,7 +12,8 @@ class HtmlChapterGeneratorTest {
 
         assertTrue(html.contains("<p>Line one</p>"))
         assertTrue(html.contains("<p>Line two</p>"))
-        assertTrue(html.contains("class=\"natsu-chapter\""))
+        assertTrue(html.contains("name=\"viewport\""))
+        assertFalse(html.contains("class=\"natsu-chapter\""))
     }
 
     @Test

@@ -3,7 +3,10 @@
 
   var BRIDGE_NAME = "NatsuBridge";
   var SCROLL_THROTTLE_MS = 400;
+  var TAP_MOVE_THRESHOLD_PX = 10;
   var lastScrollNotify = 0;
+  var touchStartX = 0;
+  var touchStartY = 0;
 
   function bridge() {
     return window[BRIDGE_NAME];
@@ -38,25 +41,23 @@
     return document.body;
   }
 
-  function charOffsetInParagraph(paragraph, textNode, nodeOffset) {
+  function charOffsetInParagraph(paragraph, range) {
+    var pre = document.createRange();
+    pre.selectNodeContents(paragraph);
+    pre.setEnd(range.startContainer, range.startOffset);
+    return pre.toString().length;
+  }
+
+  function findTextNodeInElement(element) {
     var walker = document.createTreeWalker(
-      paragraph,
+      element,
       NodeFilter.SHOW_TEXT,
       null,
     );
-    var offset = 0;
-    var node = walker.nextNode();
-    while (node) {
-      if (node === textNode) {
-        return offset + nodeOffset;
-      }
-      offset += (node.textContent || "").length;
-      node = walker.nextNode();
-    }
-    return offset;
+    return walker.nextNode();
   }
 
-  function getTapContext(clientX, clientY) {
+  function rangeFromPoint(clientX, clientY) {
     var doc = document;
     var range = null;
     if (doc.caretRangeFromPoint) {
@@ -69,7 +70,26 @@
         range.collapse(true);
       }
     }
-    if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) {
+    if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+      return range;
+    }
+    var element = doc.elementFromPoint(clientX, clientY);
+    if (!element) {
+      return null;
+    }
+    var textNode = findTextNodeInElement(element);
+    if (!textNode) {
+      return null;
+    }
+    range = doc.createRange();
+    range.setStart(textNode, 0);
+    range.collapse(true);
+    return range;
+  }
+
+  function getTapContext(clientX, clientY) {
+    var range = rangeFromPoint(clientX, clientY);
+    if (!range) {
       return null;
     }
     var paragraph = findParagraphElement(range.startContainer);
@@ -79,12 +99,19 @@
     }
     return {
       text: text,
-      charOffset: charOffsetInParagraph(
-        paragraph,
-        range.startContainer,
-        range.startOffset,
-      ),
+      charOffset: charOffsetInParagraph(paragraph, range),
     };
+  }
+
+  function handleWordTap(clientX, clientY) {
+    var result = getTapContext(clientX, clientY);
+    if (!result) {
+      return;
+    }
+    var target = bridge();
+    if (target && target.onWordTap) {
+      target.onWordTap(result.text, result.charOffset);
+    }
   }
 
   function clearHighlights() {
@@ -151,17 +178,49 @@
 
   window.NatsuReader = {
     init: function () {
+      if (window.__natsuReaderInitialized) {
+        return;
+      }
+      window.__natsuReaderInitialized = true;
+
       document.addEventListener(
-        "click",
+        "touchstart",
         function (event) {
-          var result = getTapContext(event.clientX, event.clientY);
+          if (event.touches.length !== 1) {
+            return;
+          }
+          touchStartX = event.touches[0].clientX;
+          touchStartY = event.touches[0].clientY;
+        },
+        true,
+      );
+
+      document.addEventListener(
+        "touchend",
+        function (event) {
+          if (event.changedTouches.length !== 1) {
+            return;
+          }
+          var touch = event.changedTouches[0];
+          var dx = touch.clientX - touchStartX;
+          var dy = touch.clientY - touchStartY;
+          if (dx * dx + dy * dy > TAP_MOVE_THRESHOLD_PX * TAP_MOVE_THRESHOLD_PX) {
+            return;
+          }
+          var result = getTapContext(touch.clientX, touch.clientY);
           if (!result) {
             return;
           }
-          var target = bridge();
-          if (target && target.onWordTap) {
-            target.onWordTap(result.text, result.charOffset);
-          }
+          event.preventDefault();
+          handleWordTap(touch.clientX, touch.clientY);
+        },
+        { capture: true, passive: false },
+      );
+
+      document.addEventListener(
+        "click",
+        function (event) {
+          handleWordTap(event.clientX, event.clientY);
         },
         true,
       );
@@ -169,6 +228,9 @@
       window.addEventListener("scroll", notifyScrollProgress, { passive: true });
 
       var target = bridge();
+      if (target && target.onBridgeReady) {
+        target.onBridgeReady();
+      }
       if (target && target.onChapterReady) {
         target.onChapterReady();
       }

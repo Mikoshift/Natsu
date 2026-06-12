@@ -35,11 +35,6 @@ class BookWebViewAssetLoader(
                 return assetLoader.shouldInterceptRequest(request.url)
             }
 
-            @Deprecated("Deprecated in Java")
-            override fun shouldInterceptRequest(view: WebView, url: String): WebResourceResponse? {
-                return assetLoader.shouldInterceptRequest(android.net.Uri.parse(url))
-            }
-
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
                 val relativePath = ReaderWebUrls.relativePathFromChapterUrl(url, documentId)

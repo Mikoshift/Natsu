@@ -9,6 +9,7 @@ html,
 body {
   margin: 0;
   padding: 0;
+  max-width: 100%;
 }
 
 html {
@@ -22,7 +23,7 @@ body.natsu-chapter {
   font-family: sans-serif;
   font-size: var(--natsu-font-size);
   line-height: var(--natsu-line-height);
-  padding: 12px 16px 32px;
+  padding: 16px calc(20px + env(safe-area-inset-right, 0px)) calc(40px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
   -webkit-text-size-adjust: 100%;
   word-break: normal;
   overflow-wrap: anywhere;

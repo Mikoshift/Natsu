@@ -9,15 +9,19 @@ import androidx.test.platform.app.InstrumentationRegistry
 import io.mikoshift.natsu.data.book.BookStorage
 import io.mikoshift.natsu.data.book.epub.EpubPublicationOpener
 import io.mikoshift.natsu.data.book.epub.EpubSpineMapper
+import io.mikoshift.natsu.domain.model.ReaderSettings
+import io.mikoshift.natsu.domain.model.ReaderTheme
 import io.mikoshift.natsu.domain.model.reading.BookFormat
 import io.mikoshift.natsu.domain.model.reading.BookManifest
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 @RunWith(AndroidJUnit4::class)
@@ -49,14 +53,21 @@ class ReaderWebViewInstrumentedTest {
                     bookDir = bookDir,
                     documentId = documentId,
                 )
+                val jsBridge = ReaderJsBridge(
+                    onWordTap = { _, _ -> },
+                    onScrollProgress = {},
+                    onBridgeReady = { controller.onBridgeReady() },
+                    onChapterReady = {},
+                )
                 val webView = WebView(activity).apply {
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
+                    addJavascriptInterface(jsBridge, ReaderBridgeContract.JS_INTERFACE_NAME)
                     webViewClient = assetLoader.createWebViewClient(
                         onChapterLink = {},
                         onPageFinished = { url ->
                             if (url == "about:blank") return@createWebViewClient
-                            controller.injectReaderAssets {}
+                            controller.injectReaderAssets()
                         },
                     )
                     webChromeClient = object : WebChromeClient() {
@@ -89,6 +100,92 @@ class ReaderWebViewInstrumentedTest {
         assertTrue(
             "Expected non-empty chapter body text, got length=${bodyTextLength.get()}",
             bodyTextLength.get() > 0,
+        )
+    }
+
+    @Test
+    fun appliesThemeAndAddsNatsuChapterClass() {
+        val appContext = InstrumentationRegistry.getInstrumentation().targetContext
+        val (bookDir, documentId, chapterPath) = runBlocking {
+            setupEpubBookFromAsset(
+                appContext = appContext,
+                assetPath = EPUB_ASSET_PATH,
+            )
+        }
+        val chapterUrl = ReaderWebUrls.chapterUrl(documentId, chapterPath)
+        val latch = CountDownLatch(1)
+        val hasNatsuChapterClass = AtomicBoolean(false)
+        val backgroundColor = AtomicInteger(0)
+
+        ActivityScenario.launch(ComponentActivity::class.java).use { scenario ->
+            scenario.onActivity { activity ->
+                val controller = ReaderWebViewController()
+                val assetLoader = BookWebViewAssetLoader(
+                    context = appContext,
+                    bookDir = bookDir,
+                    documentId = documentId,
+                )
+                val jsBridge = ReaderJsBridge(
+                    onWordTap = { _, _ -> },
+                    onScrollProgress = {},
+                    onBridgeReady = { controller.onBridgeReady() },
+                    onChapterReady = {
+                        controller.applyTheme(
+                            ReaderSettings(theme = ReaderTheme.DARK),
+                        )
+                        controller.webView?.postDelayed({
+                            controller.webView?.evaluateJavascript(
+                                """
+                                (function() {
+                                  var style = getComputedStyle(document.documentElement);
+                                  return JSON.stringify({
+                                    hasClass: document.body.classList.contains('natsu-chapter'),
+                                    bg: style.getPropertyValue('--natsu-bg').trim()
+                                  });
+                                })();
+                                """.trimIndent(),
+                            ) { result ->
+                                val json = result?.trim('"')?.replace("\\\"", "\"")
+                                hasNatsuChapterClass.set(json?.contains("\"hasClass\":true") == true)
+                                backgroundColor.set(
+                                    if (json?.contains("#121212") == true) 1 else 0,
+                                )
+                                latch.countDown()
+                            }
+                        }, 500L)
+                    },
+                )
+                val webView = WebView(activity).apply {
+                    settings.javaScriptEnabled = true
+                    settings.domStorageEnabled = true
+                    addJavascriptInterface(jsBridge, ReaderBridgeContract.JS_INTERFACE_NAME)
+                    webViewClient = assetLoader.createWebViewClient(
+                        onChapterLink = {},
+                        onPageFinished = { url ->
+                            if (url == "about:blank") return@createWebViewClient
+                            controller.injectReaderAssets()
+                        },
+                    )
+                }
+                controller.attach(webView)
+                activity.setContentView(webView)
+                webView.loadUrl(chapterUrl)
+            }
+
+            assertTrue(
+                "Theme was not applied within timeout",
+                latch.await(30, TimeUnit.SECONDS),
+            )
+        }
+
+        assertTrue(
+            "Expected body.natsu-chapter class after applyTheme",
+            hasNatsuChapterClass.get(),
+        )
+        assertEquals(
+            "Expected dark theme background color",
+            1,
+            backgroundColor.get(),
         )
     }
 

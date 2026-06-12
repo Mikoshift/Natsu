@@ -7,6 +7,7 @@ import android.webkit.JavascriptInterface
 class ReaderJsBridge(
     private val onWordTap: (paragraphText: String, charOffset: Int) -> Unit,
     private val onScrollProgress: (ratio: Float) -> Unit,
+    private val onBridgeReady: () -> Unit,
     private val onChapterReady: () -> Unit,
 ) {
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -22,6 +23,13 @@ class ReaderJsBridge(
     fun onScrollProgress(ratio: Double) {
         mainHandler.post {
             onScrollProgress.invoke(ratio.toFloat().coerceIn(0f, 1f))
+        }
+    }
+
+    @JavascriptInterface
+    fun onBridgeReady() {
+        mainHandler.post {
+            onBridgeReady.invoke()
         }
     }
 
