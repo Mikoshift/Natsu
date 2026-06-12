@@ -20,7 +20,8 @@ class PlainTextBookImporter(
         val extension = fileName.substringAfterLast('.', "").lowercase()
         if (extension in MARKDOWN_EXTENSIONS) return false
         if (mimeType != null && mimeType.startsWith("text/")) return true
-        return extension in SUPPORTED_EXTENSIONS || extension.isEmpty()
+        return extension in SUPPORTED_EXTENSIONS ||
+            (extension.isEmpty() && mimeType != null && mimeType.startsWith("text/"))
     }
 
     override suspend fun import(uri: Uri, displayName: String?): Result<ImportedBookPackage> =

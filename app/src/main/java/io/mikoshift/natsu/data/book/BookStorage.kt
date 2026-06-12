@@ -35,6 +35,15 @@ class BookStorage private constructor(
 
     fun bookDirectory(id: String): File = File(booksRoot, id)
 
+    fun validatedBookDirectory(documentId: String, storagePath: String): File {
+        val bookDir = bookDirectory(documentId)
+        BookPathResolver.requireUnderBooksRoot(booksRoot, storagePath)
+        require(bookDir.canonicalFile == File(storagePath).canonicalFile) {
+            "Storage path does not match document id: $documentId"
+        }
+        return bookDir
+    }
+
     fun writeManifest(bookDir: File, manifest: BookManifest) {
         val manifestFile = File(bookDir, MANIFEST_FILE_NAME)
         manifestFile.writeText(gson.toJson(manifest.toJsonModel()), StandardCharsets.UTF_8)
@@ -44,23 +53,29 @@ class BookStorage private constructor(
         val manifestFile = File(bookDir, MANIFEST_FILE_NAME)
         require(manifestFile.exists()) { "manifest.json not found in ${bookDir.absolutePath}" }
         val json = manifestFile.readText(StandardCharsets.UTF_8)
-        return gson.fromJson(json, ManifestJson::class.java).toDomain()
+        return gson.fromJson(json, ManifestJson::class.java).toDomain(bookDir)
     }
 
     fun writeContentFile(bookDir: File, relativePath: String, content: String) {
-        val contentFile = File(bookDir, relativePath)
+        val bytes = content.toByteArray(StandardCharsets.UTF_8)
+        require(bytes.size <= MAX_CONTENT_BYTES) {
+            "Content exceeds maximum size of $MAX_CONTENT_BYTES bytes"
+        }
+        val contentFile = BookPathResolver.resolveRelativePath(bookDir, relativePath)
         contentFile.parentFile?.mkdirs()
         contentFile.writeText(content, StandardCharsets.UTF_8)
     }
 
     fun deleteBookPackage(storagePath: String) {
-        File(storagePath).deleteRecursively()
+        val bookDir = BookPathResolver.requireUnderBooksRoot(booksRoot, storagePath)
+        bookDir.deleteRecursively()
     }
 
     companion object {
         const val MANIFEST_FILE_NAME = "manifest.json"
         const val PLAIN_TEXT_CONTENT_PATH = "content.txt"
         const val MARKDOWN_CONTENT_PATH = "content.md"
+        const val MAX_CONTENT_BYTES = 50 * 1024 * 1024
     }
 }
 
@@ -91,12 +106,13 @@ private fun BookManifest.toJsonModel(): ManifestJson =
         },
     )
 
-private fun ManifestJson.toDomain(): BookManifest =
+private fun ManifestJson.toDomain(bookDir: File): BookManifest =
     BookManifest(
         version = version,
         format = BookFormat.fromManifestValue(format),
         title = title,
         sections = sections.map { section ->
+            BookPathResolver.resolveRelativePath(bookDir, section.path)
             ManifestSection(
                 id = section.id,
                 title = section.title,

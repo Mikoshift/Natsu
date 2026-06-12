@@ -5,13 +5,13 @@ import com.google.gson.stream.JsonReader
 import com.google.gson.stream.JsonToken
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.InputStream
 import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
+import java.util.zip.ZipEntry
 import java.util.zip.ZipFile
-import java.util.zip.ZipInputStream
 
 data class DictionaryArchiveIndex(
     val title: String,
@@ -25,46 +25,58 @@ class TermBankImporter {
         onBatch: suspend (List<TermRecord>) -> Unit,
         onImportProgress: (filesProcessed: Int, totalFiles: Int) -> Unit = { _, _ -> },
     ): DictionaryArchiveIndex {
-        val totalTermBankFiles = countTermBankFiles(zipFile)
-        var filesProcessed = 0
-        var index: DictionaryArchiveIndex? = null
-        ZipInputStream(FileInputStream(zipFile)).use { zipInput ->
-            while (true) {
-                val entry = zipInput.nextEntry ?: break
-                if (entry.isDirectory) {
-                    zipInput.closeEntry()
-                    continue
-                }
-                val entryName = entry.name.substringAfterLast('/')
-                when {
-                    entryName == "index.json" -> {
-                        index = readIndex(zipInput)
-                    }
-                    entryName.startsWith("term_bank") && entryName.endsWith(".json") -> {
-                        parseTermBankStream(zipInput, catalogId, onBatch)
-                        filesProcessed++
-                        onImportProgress(filesProcessed, totalTermBankFiles)
-                    }
-                    else -> Unit
-                }
-                zipInput.closeEntry()
+        val limits = ZipImportLimits()
+        ZipFile(zipFile).use { zip ->
+            val fileEntries = zip.entries().asSequence()
+                .filter { !it.isDirectory }
+                .toList()
+
+            val indexEntry = fileEntries.firstOrNull { entry ->
+                entry.name.substringAfterLast('/') == INDEX_JSON
+            } ?: error("index.json not found in dictionary archive")
+
+            val index = zip.getInputStream(indexEntry).use { input ->
+                readIndex(limits.entryInputStream(input))
             }
+
+            val termBankEntries = fileEntries.filter { entry ->
+                entry.name.substringAfterLast('/').let { name ->
+                    name.startsWith(TERM_BANK_PREFIX) && name.endsWith(".json")
+                }
+            }
+            val totalTermBankFiles = termBankEntries.size.coerceAtLeast(1)
+            var filesProcessed = 0
+
+            for (entry in termBankEntries) {
+                zip.getInputStream(entry).use { input ->
+                    parseTermBankStream(limits.entryInputStream(input), catalogId, onBatch)
+                }
+                filesProcessed++
+                onImportProgress(filesProcessed, totalTermBankFiles)
+            }
+
+            return index
         }
-        return index ?: error("index.json not found in dictionary archive")
     }
 
-    private fun countTermBankFiles(zipFile: File): Int =
-        ZipFile(zipFile).use { zip ->
-            zip.entries().asSequence().count { entry ->
-                !entry.isDirectory &&
-                    entry.name.substringAfterLast('/').let { name ->
-                        name.startsWith("term_bank") && name.endsWith(".json")
-                    }
-            }.coerceAtLeast(1)
+    private fun readIndex(input: InputStream): DictionaryArchiveIndex {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+        var totalRead = 0
+        while (true) {
+            val toRead = minOf(buffer.size, MAX_INDEX_JSON_BYTES - totalRead + 1)
+            if (toRead <= 0) {
+                error("index.json exceeds maximum size ($MAX_INDEX_JSON_BYTES bytes)")
+            }
+            val read = input.read(buffer, 0, toRead)
+            if (read == -1) break
+            output.write(buffer, 0, read)
+            totalRead += read
+            if (totalRead > MAX_INDEX_JSON_BYTES) {
+                error("index.json exceeds maximum size ($MAX_INDEX_JSON_BYTES bytes)")
+            }
         }
-
-    private fun readIndex(zipInput: ZipInputStream): DictionaryArchiveIndex {
-        val json = JSONObject(String(zipInput.readBytes(), StandardCharsets.UTF_8))
+        val json = JSONObject(output.toString(StandardCharsets.UTF_8.name()))
         return DictionaryArchiveIndex(
             title = json.getString("title"),
             revision = json.optString("revision", "1"),
@@ -72,14 +84,12 @@ class TermBankImporter {
     }
 
     private suspend fun parseTermBankStream(
-        zipInput: ZipInputStream,
+        input: InputStream,
         catalogId: String,
         onBatch: suspend (List<TermRecord>) -> Unit,
     ) {
         val batch = ArrayList<TermRecord>(BATCH_SIZE)
-        val reader = JsonReader(
-            InputStreamReader(NonClosingInputStream(zipInput), StandardCharsets.UTF_8),
-        )
+        val reader = JsonReader(InputStreamReader(input, StandardCharsets.UTF_8))
         reader.use {
             it.beginArray()
             while (it.hasNext()) {
@@ -189,7 +199,10 @@ class TermBankImporter {
         readJsonValue(reader)
     }
 
-    private fun readJsonValue(reader: JsonReader): Any? {
+    private fun readJsonValue(reader: JsonReader, depth: Int = 0): Any? {
+        if (depth > MAX_JSON_DEPTH) {
+            error("JSON nesting exceeds maximum depth ($MAX_JSON_DEPTH)")
+        }
         return when (reader.peek()) {
             JsonToken.NULL -> {
                 reader.nextNull()
@@ -205,7 +218,7 @@ class TermBankImporter {
                 val array = JSONArray()
                 reader.beginArray()
                 while (reader.hasNext()) {
-                    array.put(readJsonValue(reader))
+                    array.put(readJsonValue(reader, depth + 1))
                 }
                 reader.endArray()
                 array
@@ -214,7 +227,7 @@ class TermBankImporter {
                 val obj = JSONObject()
                 reader.beginObject()
                 while (reader.hasNext()) {
-                    obj.put(reader.nextName(), readJsonValue(reader))
+                    obj.put(reader.nextName(), readJsonValue(reader, depth + 1))
                 }
                 reader.endObject()
                 obj
@@ -275,25 +288,72 @@ class TermBankImporter {
         }
     }
 
+    private class ZipImportLimits {
+        private var totalUncompressedBytes = 0L
+
+        fun entryInputStream(delegate: InputStream): InputStream =
+            LimitedInputStream(delegate, MAX_ZIP_ENTRY_BYTES) { bytesRead ->
+                totalUncompressedBytes += bytesRead
+                if (totalUncompressedBytes > MAX_TOTAL_UNCOMPRESSED_BYTES) {
+                    error(
+                        "Total uncompressed size exceeds maximum " +
+                            "($MAX_TOTAL_UNCOMPRESSED_BYTES bytes)",
+                    )
+                }
+            }
+    }
+
     companion object {
         private const val BATCH_SIZE = 2000
+        private const val INDEX_JSON = "index.json"
+        private const val TERM_BANK_PREFIX = "term_bank"
+        const val MAX_ZIP_ENTRY_BYTES = 10L * 1024 * 1024
+        const val MAX_INDEX_JSON_BYTES = 64 * 1024
+        const val MAX_JSON_DEPTH = 32
+        const val MAX_TOTAL_UNCOMPRESSED_BYTES = 150L * 1024 * 1024
     }
 }
 
-/**
- * Prevents nested readers (JsonReader, BufferedReader) from closing [ZipInputStream]
- * when they are closed at the end of an entry.
- */
-private class NonClosingInputStream(
+private class LimitedInputStream(
     private val delegate: InputStream,
+    private val maxBytes: Long,
+    private val onBytesRead: (Int) -> Unit,
 ) : InputStream() {
-    override fun read(): Int = delegate.read()
+    private var entryBytesRead = 0L
 
-    override fun read(b: ByteArray, off: Int, len: Int): Int = delegate.read(b, off, len)
+    override fun read(): Int {
+        if (entryBytesRead >= maxBytes) {
+            error("ZIP entry exceeds maximum size ($maxBytes bytes)")
+        }
+        val value = delegate.read()
+        if (value >= 0) {
+            entryBytesRead++
+            onBytesRead(1)
+        }
+        return value
+    }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int {
+        if (entryBytesRead >= maxBytes) {
+            error("ZIP entry exceeds maximum size ($maxBytes bytes)")
+        }
+        val cappedLen = minOf(len.toLong(), maxBytes - entryBytesRead).toInt()
+        if (cappedLen <= 0) {
+            error("ZIP entry exceeds maximum size ($maxBytes bytes)")
+        }
+        val read = delegate.read(b, off, cappedLen)
+        if (read > 0) {
+            entryBytesRead += read
+            onBytesRead(read)
+        }
+        return read
+    }
 
     override fun available(): Int = delegate.available()
 
     override fun skip(n: Long): Long = delegate.skip(n)
 
-    override fun close() = Unit
+    override fun close() {
+        delegate.close()
+    }
 }

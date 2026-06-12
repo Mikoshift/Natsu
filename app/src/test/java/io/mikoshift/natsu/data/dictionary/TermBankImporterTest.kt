@@ -70,6 +70,53 @@ class TermBankImporterTest {
         assertTrue(terms[0].glossesJson.contains("structured definition"))
     }
 
+    @Test
+    fun importZip_rejectsOversizedIndexJson() = runBlocking {
+        val oversizedIndex = "a".repeat(TermBankImporter.MAX_INDEX_JSON_BYTES + 1)
+        val zipFile = createZip(
+            "index.json" to oversizedIndex,
+            "term_bank_1.json" to """[["x","x","","",0,["y"]]]""",
+        )
+
+        val error = runCatching {
+            importer.importZip(
+                zipFile = zipFile,
+                catalogId = "oversized-index",
+                onBatch = {},
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error?.message?.contains("index.json exceeds maximum size") == true)
+    }
+
+    @Test
+    fun importZip_rejectsExcessivelyNestedJson() = runBlocking {
+        val depth = TermBankImporter.MAX_JSON_DEPTH + 2
+        val nestedArray = buildString {
+            repeat(depth) { append('[') }
+            append("\"deep\"")
+            repeat(depth) { append(']') }
+        }
+        val zipFile = createZip(
+            "index.json" to """{"title":"Deep Dict","revision":"1"}""",
+            "term_bank_1.json" to """
+                [
+                  ["deep", "deep", "", 0, 100, $nestedArray]
+                ]
+            """.trimIndent(),
+        )
+
+        val error = runCatching {
+            importer.importZip(
+                zipFile = zipFile,
+                catalogId = "deep-json",
+                onBatch = {},
+            )
+        }.exceptionOrNull()
+
+        assertTrue(error?.message?.contains("JSON nesting exceeds maximum depth") == true)
+    }
+
     private fun createZip(vararg entries: Pair<String, String>): File {
         val file = File.createTempFile("term_bank_test", ".zip")
         file.deleteOnExit()

@@ -115,7 +115,13 @@ class DictionaryManagerRepositoryImpl(
             val progressTracker = DownloadProgressTracker()
 
             try {
-                downloadManager.download(catalogItem.downloadUrl, zipFile) { rawProgress ->
+                DictionaryUrlValidator.validateDownloadUrl(catalogItem.downloadUrl)
+                val maxBytes = DictionaryUrlValidator.computeMaxBytes(catalogItem.sizeHintMb)
+                downloadManager.download(
+                    url = catalogItem.downloadUrl,
+                    destination = zipFile,
+                    maxBytes = maxBytes,
+                ) { rawProgress ->
                     progressTracker.onDownloadProgress(rawProgress) { mapped ->
                         downloadProgress.value = downloadProgress.value + (catalogId to mapped)
                     }

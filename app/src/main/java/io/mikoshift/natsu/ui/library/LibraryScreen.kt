@@ -328,8 +328,7 @@ private fun resolveLibraryErrorMessage(context: Context, error: Throwable): Stri
         is EmptyFileException -> context.getString(R.string.import_error_empty)
         is UnsupportedTextEncodingException -> context.getString(R.string.import_error_unsupported_encoding)
         is UnsupportedFormatException -> context.getString(R.string.import_error_unsupported_format)
-        else -> error.message?.takeIf { it.isNotBlank() }
-            ?: context.getString(R.string.import_error_generic)
+        else -> context.getString(R.string.import_error_generic)
     }
 }
 

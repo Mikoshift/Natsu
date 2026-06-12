@@ -1,5 +1,6 @@
 package io.mikoshift.natsu.data.book.load
 
+import io.mikoshift.natsu.data.book.BookPathResolver
 import io.mikoshift.natsu.data.reader.buildParagraphLayout
 import io.mikoshift.natsu.domain.model.reading.BookFormat
 import io.mikoshift.natsu.domain.model.reading.ManifestSection
@@ -13,7 +14,7 @@ class PlainTextFormatLoader : FormatReadingLoader {
     override val format: BookFormat = BookFormat.PlainText
 
     override suspend fun loadSection(bookDir: File, section: ManifestSection): ReadingSection {
-        val contentFile = File(bookDir, section.path)
+        val contentFile = BookPathResolver.resolveRelativePath(bookDir, section.path)
         require(contentFile.exists()) {
             "Section content not found: ${section.path}"
         }

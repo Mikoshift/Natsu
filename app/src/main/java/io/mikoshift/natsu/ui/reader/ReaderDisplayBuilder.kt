@@ -4,6 +4,7 @@ import io.mikoshift.natsu.domain.model.TextToken
 import io.mikoshift.natsu.domain.model.reading.ReadingBlock
 import io.mikoshift.natsu.domain.model.reading.ReadingBook
 import io.mikoshift.natsu.domain.model.reading.ReadingLayout
+import io.mikoshift.natsu.domain.model.reading.contributesLayoutParagraph
 
 object ReaderDisplayBuilder {
     fun buildItems(
@@ -18,27 +19,33 @@ object ReaderDisplayBuilder {
             section.blocks.forEach { block ->
                 when (block) {
                     is ReadingBlock.Paragraph -> {
+                        val included = block.contributesLayoutParagraph()
                         items.add(
                             ReaderDisplayItem(
-                                layoutParagraphIndex = layoutParagraphIndex,
+                                layoutParagraphIndex = if (included) layoutParagraphIndex else null,
                                 content = ReaderBlockContent.Paragraph(
-                                    tokens = tokenizedParagraphs[layoutParagraphIndex],
+                                    tokens = if (included) {
+                                        tokenizedParagraphs[layoutParagraphIndex]
+                                    } else {
+                                        emptyList()
+                                    },
                                 ),
                             ),
                         )
-                        layoutParagraphIndex++
+                        if (included) layoutParagraphIndex++
                     }
                     is ReadingBlock.Heading -> {
+                        val included = block.contributesLayoutParagraph()
                         items.add(
                             ReaderDisplayItem(
-                                layoutParagraphIndex = layoutParagraphIndex,
+                                layoutParagraphIndex = if (included) layoutParagraphIndex else null,
                                 content = ReaderBlockContent.Heading(
                                     text = block.text,
                                     level = block.level,
                                 ),
                             ),
                         )
-                        layoutParagraphIndex++
+                        if (included) layoutParagraphIndex++
                     }
                     is ReadingBlock.Image -> {
                         items.add(

@@ -3,6 +3,7 @@ package io.mikoshift.natsu.data.reader
 import io.mikoshift.natsu.domain.model.reading.ReadingBlock
 import io.mikoshift.natsu.domain.model.reading.ReadingBook
 import io.mikoshift.natsu.domain.model.reading.ReadingLayout
+import io.mikoshift.natsu.domain.model.reading.contributesLayoutParagraph
 
 /**
  * Builds [ReadingLayout] from [ReadingBook] IR.
@@ -28,30 +29,21 @@ class ReadingLayoutBuilder {
             }
 
             section.blocks.forEach { block ->
-                when (block) {
-                    is ReadingBlock.Paragraph -> {
-                        val paragraphText = block.spans.joinToString(separator = "") { it.text }
-                        if (paragraphText.isEmpty()) return@forEach
+                if (!block.contributesLayoutParagraph()) return@forEach
 
-                        if (canonicalBuilder.isNotEmpty()) {
-                            canonicalBuilder.append('\n')
-                        }
-                        paragraphStartOffsets.add(canonicalBuilder.length)
-                        canonicalBuilder.append(paragraphText)
-                        paragraphs.add(paragraphText)
-                    }
-                    is ReadingBlock.Heading -> {
-                        if (block.text.isBlank()) return@forEach
-
-                        if (canonicalBuilder.isNotEmpty()) {
-                            canonicalBuilder.append('\n')
-                        }
-                        paragraphStartOffsets.add(canonicalBuilder.length)
-                        canonicalBuilder.append(block.text)
-                        paragraphs.add(block.text)
-                    }
-                    is ReadingBlock.Image -> Unit
+                val paragraphText = when (block) {
+                    is ReadingBlock.Paragraph ->
+                        block.spans.joinToString(separator = "") { it.text }
+                    is ReadingBlock.Heading -> block.text
+                    is ReadingBlock.Image -> return@forEach
                 }
+
+                if (canonicalBuilder.isNotEmpty()) {
+                    canonicalBuilder.append('\n')
+                }
+                paragraphStartOffsets.add(canonicalBuilder.length)
+                canonicalBuilder.append(paragraphText)
+                paragraphs.add(paragraphText)
             }
         }
 

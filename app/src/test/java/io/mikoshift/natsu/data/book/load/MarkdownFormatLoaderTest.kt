@@ -5,6 +5,7 @@ import io.mikoshift.natsu.domain.model.reading.ManifestSection
 import io.mikoshift.natsu.domain.model.reading.ReadingBlock
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
@@ -59,6 +60,50 @@ class MarkdownFormatLoaderTest {
         )
 
         assertEquals("images/cover.png", resolved)
+    }
+
+    @Test
+    fun resolveAssetPath_rejectsPrefixAttackSiblingDirectory() {
+        val bookDir = File.createTempFile("book", null).apply {
+            check(delete())
+            check(mkdirs())
+        }
+        val sibling = File(bookDir.parentFile, "${bookDir.name}-evil").apply { mkdirs() }
+        File(sibling, "secret.png").apply {
+            parentFile?.mkdirs()
+            writeText("png", StandardCharsets.UTF_8)
+        }
+
+        assertThrows(IllegalArgumentException::class.java) {
+            loader.resolveAssetPath(
+                bookDir = bookDir,
+                sectionPath = BookStorage.MARKDOWN_CONTENT_PATH,
+                destination = "../${sibling.name}/secret.png",
+            )
+        }
+    }
+
+    @Test
+    fun loadSection_skipsRemoteImageUrls() = runBlocking {
+        val bookDir = createBookDirectory(
+            markdown = """
+            Body text.
+
+            ![Remote](https://example.com/image.png)
+            """.trimIndent(),
+        )
+
+        val section = loader.loadSection(
+            bookDir = bookDir,
+            section = ManifestSection(
+                id = "main",
+                title = null,
+                path = BookStorage.MARKDOWN_CONTENT_PATH,
+            ),
+        )
+
+        assertEquals(1, section.blocks.size)
+        assertTrue(section.blocks[0] is ReadingBlock.Paragraph)
     }
 
     private fun createBookDirectory(markdown: String): File {

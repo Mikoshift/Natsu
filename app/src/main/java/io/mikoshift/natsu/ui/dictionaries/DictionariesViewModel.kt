@@ -39,9 +39,9 @@ class DictionariesViewModel(
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(actionInProgressId = catalogId, errorMessage = null)
             dictionaryManagerRepository.downloadDictionary(catalogId)
-                .onFailure { error ->
+                .onFailure {
                     _uiState.value = _uiState.value.copy(
-                        errorMessage = error.message ?: "Download failed",
+                        errorMessage = DOWNLOAD_ERROR_MESSAGE,
                     )
                 }
             _uiState.value = _uiState.value.copy(actionInProgressId = null)
@@ -68,5 +68,9 @@ class DictionariesViewModel(
 
     fun clearError() {
         _uiState.value = _uiState.value.copy(errorMessage = null)
+    }
+
+    companion object {
+        const val DOWNLOAD_ERROR_MESSAGE = "Download failed"
     }
 }

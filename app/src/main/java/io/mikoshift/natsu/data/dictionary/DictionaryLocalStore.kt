@@ -246,6 +246,7 @@ class DictionaryLocalStore(context: Context) {
                 WHERE d.enabled = 1
                   AND (t.expression IN ($placeholders) OR t.reading IN ($placeholders))
                 ORDER BY d.priority ASC, t.score DESC
+                LIMIT 100
                 """.trimIndent(),
                 args,
             ).use { cursor ->
@@ -302,6 +303,7 @@ class DictionaryLocalStore(context: Context) {
         SQLiteOpenHelper(context, DB_NAME, null, DB_VERSION) {
 
         override fun onConfigure(db: SQLiteDatabase) {
+            db.setForeignKeyConstraintsEnabled(true)
             db.enableWriteAheadLogging()
             db.execSQL("PRAGMA synchronous=NORMAL")
             db.execSQL("PRAGMA temp_store=MEMORY")

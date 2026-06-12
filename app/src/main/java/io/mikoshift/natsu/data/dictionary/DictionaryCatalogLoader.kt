@@ -14,12 +14,14 @@ class DictionaryCatalogLoader(
         return buildList {
             for (index in 0 until terms.length()) {
                 val item = terms.getJSONObject(index)
+                val downloadUrl = item.getString("downloadUrl")
+                DictionaryUrlValidator.validateDownloadUrl(downloadUrl)
                 add(
                     DictionaryCatalogItem(
                         id = item.getString("id"),
                         name = item.getString("name"),
                         description = item.getString("description"),
-                        downloadUrl = item.getString("downloadUrl"),
+                        downloadUrl = downloadUrl,
                         sizeHintMb = item.optInt("sizeHintMb", 0),
                     ),
                 )

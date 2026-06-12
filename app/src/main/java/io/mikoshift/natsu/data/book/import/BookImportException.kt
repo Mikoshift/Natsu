@@ -10,3 +10,6 @@ class EmptyFileException :
 
 class UnsupportedFormatException(fileName: String) :
     BookImportException("Unsupported file format: $fileName")
+
+class FileTooLargeException :
+    BookImportException("File exceeds maximum import size")

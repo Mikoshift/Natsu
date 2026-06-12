@@ -2,7 +2,6 @@ package io.mikoshift.natsu.data.book.load
 
 import io.mikoshift.natsu.data.book.BookStorage
 import io.mikoshift.natsu.domain.model.reading.ReadingBook
-import java.io.File
 
 class ManifestReadingContentLoader(
     private val bookStorage: BookStorage,
@@ -12,8 +11,10 @@ class ManifestReadingContentLoader(
 
     suspend fun load(documentId: String, storagePath: String, title: String): Result<ReadingBook> =
         runCatching {
-            val bookDir = File(storagePath)
-            require(bookDir.isDirectory) { "Book storage is not a directory: $storagePath" }
+            val bookDir = bookStorage.validatedBookDirectory(documentId, storagePath)
+            require(bookDir.isDirectory) {
+                "Book storage is not a directory: ${bookDir.absolutePath}"
+            }
             val manifest = bookStorage.readManifest(bookDir)
             val loader = loadersByFormat[manifest.format]
                 ?: throw IllegalStateException("No loader registered for format: ${manifest.format}")

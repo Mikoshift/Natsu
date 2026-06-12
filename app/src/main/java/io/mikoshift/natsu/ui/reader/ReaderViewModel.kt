@@ -80,27 +80,34 @@ class ReaderViewModel(
     private var lastSavedCharOffset: Int = -1
     private var lastSavedParagraphIndex: Int = -1
     private var saveJob: Job? = null
+    private var loadJob: Job? = null
+    private var pendingLoadDocumentId: String? = null
     private var rawText: String = ""
     private var searchJob: Job? = null
     private var searchScrollRequestId: Long = 0L
 
     fun loadDocument(documentId: String) {
-        viewModelScope.launch {
+        loadJob?.cancel()
+        pendingLoadDocumentId = documentId
+        loadJob = viewModelScope.launch {
             saveJob?.cancel()
+            val requestedDocumentId = documentId
             _uiState.update { it.copy(isLoading = true, errorMessage = null) }
-            val document = documentRepository.getDocument(documentId)
+            val document = documentRepository.getDocument(requestedDocumentId)
             if (document == null) {
+                if (pendingLoadDocumentId != requestedDocumentId) return@launch
                 _uiState.update {
                     it.copy(isLoading = false, errorMessage = "Document not found")
                 }
                 return@launch
             }
 
-            readingContentRepository.loadReadingContent(documentId)
+            readingContentRepository.loadReadingContent(requestedDocumentId)
                 .onSuccess { content ->
+                    if (pendingLoadDocumentId != requestedDocumentId) return@onSuccess
                     val layout = content.layout
                     rawText = layout.canonicalText
-                    documentRepository.ensureCharCount(documentId, layout.canonicalText.length)
+                    documentRepository.ensureCharCount(requestedDocumentId, layout.canonicalText.length)
                     val tokenized = withContext(Dispatchers.Default) {
                         textTokenizer.tokenizeParagraphs(layout.paragraphs)
                     }
@@ -139,11 +146,12 @@ class ReaderViewModel(
                         )
                     }
                 }
-                .onFailure { error ->
+                .onFailure {
+                    if (pendingLoadDocumentId != requestedDocumentId) return@onFailure
                     _uiState.update {
                         it.copy(
                             isLoading = false,
-                            errorMessage = error.message ?: "Failed to load text",
+                            errorMessage = LOAD_ERROR_MESSAGE,
                         )
                     }
                 }
@@ -380,5 +388,6 @@ class ReaderViewModel(
     companion object {
         private const val READING_POSITION_SAVE_DELAY_MS = 400L
         private const val SEARCH_DEBOUNCE_MS = 250L
+        const val LOAD_ERROR_MESSAGE = "Could not load this book"
     }
 }

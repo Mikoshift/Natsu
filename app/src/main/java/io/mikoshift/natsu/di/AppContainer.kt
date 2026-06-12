@@ -40,6 +40,7 @@ class AppContainer(context: Context) {
     private val bookStorage: BookStorage by lazy { BookStorage(appContext) }
     private val bookImportCoordinator: BookImportCoordinator by lazy {
         BookImportCoordinator(
+            context = appContext,
             importers = listOf(
                 MarkdownBookImporter(
                     context = appContext,
@@ -81,6 +82,7 @@ class AppContainer(context: Context) {
     val readingContentRepository: ReadingContentRepository by lazy {
         ReadingContentRepositoryImpl(
             documentLocalStore = documentLocalStore,
+            bookStorage = bookStorage,
             manifestReadingContentLoader = manifestReadingContentLoader,
             readingLayoutBuilder = readingLayoutBuilder,
         )
