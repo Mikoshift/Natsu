@@ -3,7 +3,7 @@ import { isInsideTag } from "./walker.js";
 const SKIP_TAGS = new Set(["RT", "RP", "SCRIPT", "STYLE", "HEAD"]);
 const INVISIBLE_CODE_POINTS = new Set([0x200b, 0x200c, 0x00ad]);
 
-/** Layout-visible text: skips ruby readings, preserves `<br>` as `\n`, drops zero-width chars. */
+/** Layout-visible text: skips ruby readings, preserves `<br>` as `\n`, includes `<img alt>`. */
 export function extractLayoutText(root: Node): string {
   const parts: string[] = [];
   walkLayout(root, root, (chunk) => parts.push(chunk));
@@ -23,6 +23,10 @@ export function layoutOffsetAtRange(root: Node, range: Range): number | null {
     }
     if (meta?.kind === "text" && meta.node === targetNode) {
       offset += visibleOffsetInTextNode(meta.node, targetOffset);
+      found = true;
+      return;
+    }
+    if (meta?.kind === "image" && targetNode === meta.element) {
       found = true;
       return;
     }
@@ -50,7 +54,17 @@ export function layoutRangeAtOffset(root: Node, targetOffset: number): Range | n
         range.setStart(meta.node, rawOffset);
         range.collapse(true);
         result = range;
+      } else if (meta?.kind === "image") {
+        const range = document.createRange();
+        range.setStart(meta.element, 0);
+        range.collapse(true);
+        result = range;
       }
+    } else if (meta?.kind === "image" && chunk.length === 0 && targetOffset === start) {
+      const range = document.createRange();
+      range.setStart(meta.element, 0);
+      range.collapse(true);
+      result = range;
     }
     current = end;
   });
@@ -64,23 +78,37 @@ export interface LayoutTextSegment {
   localEnd: number;
 }
 
-/** Layout-text segments overlapping `[start, end)` — text nodes only, skips `<br>`. */
-export function layoutSegmentsForRange(root: Node, start: number, end: number): LayoutTextSegment[] {
+export type LayoutSegment =
+  | ({ kind: "text" } & LayoutTextSegment)
+  | { kind: "image"; element: HTMLImageElement; localStart: number; localEnd: number };
+
+/** Layout-text segments overlapping `[start, end)` within a single block root. */
+export function layoutSegmentsForRange(root: Node, start: number, end: number): LayoutSegment[] {
   if (start >= end) {
     return [];
   }
-  const segments: LayoutTextSegment[] = [];
+  const segments: LayoutSegment[] = [];
   let current = 0;
 
   walkLayout(root, root, (chunk, meta) => {
     const chunkStart = current;
     const chunkEnd = current + chunk.length;
-    if (meta?.kind === "text" && end > chunkStart && start < chunkEnd) {
-      segments.push({
-        node: meta.node,
-        localStart: Math.max(0, start - chunkStart),
-        localEnd: Math.min(chunk.length, end - chunkStart),
-      });
+    if (end > chunkStart && start < chunkEnd) {
+      if (meta?.kind === "text") {
+        segments.push({
+          kind: "text",
+          node: meta.node,
+          localStart: Math.max(0, start - chunkStart),
+          localEnd: Math.min(chunk.length, end - chunkStart),
+        });
+      } else if (meta?.kind === "image") {
+        segments.push({
+          kind: "image",
+          element: meta.element,
+          localStart: Math.max(0, start - chunkStart),
+          localEnd: Math.min(chunk.length, end - chunkStart),
+        });
+      }
     }
     current = chunkEnd;
   });
@@ -88,14 +116,18 @@ export function layoutSegmentsForRange(root: Node, start: number, end: number): 
   return segments;
 }
 
-/** Collapsed DOM range for a layout-text span `[start, end)`. */
+/** Collapsed DOM range for a layout-text span `[start, end)` within a single block root. */
 export function layoutRangeForSpan(root: Node, start: number, end: number): Range | null {
   const segments = layoutSegmentsForRange(root, start, end);
   if (segments.length === 0) {
     return null;
   }
-  const first = segments[0];
-  const last = segments[segments.length - 1];
+  const textSegments = segments.filter((segment): segment is { kind: "text" } & LayoutTextSegment => segment.kind === "text");
+  if (textSegments.length === 0) {
+    return null;
+  }
+  const first = textSegments[0];
+  const last = textSegments[textSegments.length - 1];
   const range = document.createRange();
   range.setStart(first.node, rawOffsetForVisibleIndex(first.node, first.localStart));
   range.setEnd(last.node, rawOffsetForVisibleIndex(last.node, last.localEnd));
@@ -104,7 +136,8 @@ export function layoutRangeForSpan(root: Node, start: number, end: number): Rang
 
 type LayoutChunkMeta =
   | { kind: "text"; node: Text }
-  | { kind: "newline" };
+  | { kind: "newline" }
+  | { kind: "image"; element: HTMLImageElement };
 
 function walkLayout(
   node: Node,
@@ -126,12 +159,18 @@ function walkLayout(
     return;
   }
 
-  const tag = (node as Element).tagName.toUpperCase();
+  const element = node as Element;
+  const tag = element.tagName.toUpperCase();
   if (SKIP_TAGS.has(tag)) {
     return;
   }
   if (tag === "BR") {
     emit("\n", { kind: "newline" });
+    return;
+  }
+  if (tag === "IMG") {
+    const alt = (element as HTMLImageElement).alt || "";
+    emit(alt, { kind: "image", element: element as HTMLImageElement });
     return;
   }
 

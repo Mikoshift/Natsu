@@ -25,8 +25,8 @@ class SectionLayoutBuilderTest {
         val sectionLayout = builder.buildSection(section)
 
         assertEquals("chapter-1", sectionLayout.sectionId)
-        assertEquals(listOf("Title", "Body"), sectionLayout.paragraphs)
-        assertEquals(listOf(0, 1), sectionLayout.blockIndexByParagraph)
-        assertEquals("Title\nBody", sectionLayout.canonicalText)
+        assertEquals(listOf("Title", "Body", ""), sectionLayout.paragraphs)
+        assertEquals(listOf(0, 1, 2), sectionLayout.blockIndexByParagraph)
+        assertEquals("Title\nBody\n", sectionLayout.canonicalText)
     }
 }

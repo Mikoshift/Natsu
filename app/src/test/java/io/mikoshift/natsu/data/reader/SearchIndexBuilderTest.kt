@@ -69,4 +69,30 @@ class SearchIndexBuilderTest {
         assertEquals("main", matches.single().locator.sectionId)
         assertTrue(matches.single().localRange.first >= 0)
     }
+
+    @Test
+    fun findMatches_findsImageAltText() {
+        val book = ReadingBook(
+            id = "book-1",
+            title = "Test",
+            sections = listOf(
+                ReadingSection(
+                    id = "main",
+                    title = null,
+                    blocks = listOf(
+                        ReadingBlock.Paragraph(listOf(TextSpan(text = "本文"))),
+                        ReadingBlock.Image(relativePath = "images/cover.png", alt = "Cover"),
+                        ReadingBlock.Paragraph(listOf(TextSpan(text = "続き"))),
+                    ),
+                ),
+            ),
+        )
+        val index = builder.build(book)
+
+        val matches = index.findMatches("Cover")
+        assertEquals(1, matches.size)
+        assertEquals("main", matches.single().locator.sectionId)
+        assertEquals(1, matches.single().locator.blockIndex)
+        assertEquals(0, matches.single().localRange.first)
+    }
 }

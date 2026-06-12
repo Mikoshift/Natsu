@@ -3,7 +3,7 @@ import { PARAGRAPH_INDEX_ATTR } from "../text/paragraph-index.js";
 import { collectTextRoot } from "../text/walker.js";
 
 const PREFERRED_BLOCK_TAGS = new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
-const NESTED_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, td, blockquote, div";
+const NESTED_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, td, blockquote, div, img";
 
 export function tagParagraphs(expectedTexts: string[] | null | undefined): void {
   if (!expectedTexts?.length) {
@@ -18,10 +18,6 @@ export function tagParagraphs(expectedTexts: string[] | null | undefined): void 
       return;
     }
     const text = extractLayoutText(block);
-    if (!text.trim()) {
-      return;
-    }
-
     const matchedIndex = matchParagraphIndex(text, expectedTexts, cursor);
     if (matchedIndex >= 0) {
       block.setAttribute(PARAGRAPH_INDEX_ATTR, String(matchedIndex));
@@ -50,16 +46,20 @@ function collectBlocksFrom(container: Node, blocks: HTMLElement[]): void {
     }
     const element = child as HTMLElement;
     const tag = element.tagName.toUpperCase();
+    if (tag === "IMG") {
+      blocks.push(element);
+      return;
+    }
     if (PREFERRED_BLOCK_TAGS.has(tag)) {
-      if (extractLayoutText(element).trim()) {
+      if (isLayoutBlock(element)) {
         blocks.push(element);
       }
       return;
     }
-    if (tag === "DIV") {
+    if (tag === "DIV" || tag === "FIGURE") {
       if (hasNestedLayoutBlock(element)) {
         collectBlocksFrom(element, blocks);
-      } else if (extractLayoutText(element).trim()) {
+      } else if (isLayoutBlock(element)) {
         blocks.push(element);
       }
       return;
@@ -68,6 +68,20 @@ function collectBlocksFrom(container: Node, blocks: HTMLElement[]): void {
       collectBlocksFrom(element, blocks);
     }
   });
+}
+
+function isLayoutBlock(element: HTMLElement): boolean {
+  if (element.tagName.toUpperCase() === "IMG") {
+    return true;
+  }
+  if (extractLayoutText(element).trim()) {
+    return true;
+  }
+  return isImageOnlyBlock(element);
+}
+
+function isImageOnlyBlock(element: HTMLElement): boolean {
+  return element.querySelector("img") !== null && !extractLayoutText(element).trim();
 }
 
 function hasNestedLayoutBlock(element: Element): boolean {

@@ -66,6 +66,50 @@ class XhtmlToReadingBlocksTest {
     }
 
     @Test
+    fun parse_imageOnlyParagraph() {
+        val blocks = XhtmlToReadingBlocks.parse(
+            """
+            <html><body>
+              <p><img src="images/cover.png" alt="Cover"/></p>
+            </body></html>
+            """.trimIndent(),
+            baseHref = "OEBPS/chapter.xhtml",
+        )
+
+        assertEquals(1, blocks.size)
+        assertEquals(
+            ReadingBlock.Image(relativePath = "images/cover.png", alt = "Cover"),
+            blocks.single(),
+        )
+    }
+
+    @Test
+    fun parse_paragraphWithInlineImage() {
+        val blocks = XhtmlToReadingBlocks.parse(
+            """
+            <html><body>
+              <p>See <img src="images/diagram.png" alt="Diagram"/> below.</p>
+            </body></html>
+            """.trimIndent(),
+            baseHref = "OEBPS/chapter.xhtml",
+        )
+
+        assertEquals(3, blocks.size)
+        assertEquals(
+            ReadingBlock.Paragraph(listOf(TextSpan(text = "See "))),
+            blocks[0],
+        )
+        assertEquals(
+            ReadingBlock.Image(relativePath = "images/diagram.png", alt = "Diagram"),
+            blocks[1],
+        )
+        assertEquals(
+            ReadingBlock.Paragraph(listOf(TextSpan(text = " below."))),
+            blocks[2],
+        )
+    }
+
+    @Test
     fun parse_rubyWithoutRt_isPlainText() {
         val blocks = XhtmlToReadingBlocks.parse(
             """
