@@ -21,7 +21,7 @@ class TextSearchTest {
     fun findMatchOffsets_findsJapaneseSubstring() {
         val text = "吾輩は猫である。名前はまだ無い。"
         assertEquals(listOf(3), findMatchOffsets(text, "猫"))
-        assertEquals(listOf(0, 10), findMatchOffsets(text, "は"))
+        assertEquals(listOf(2, 10), findMatchOffsets(text, "は"))
     }
 
     @Test

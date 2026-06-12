@@ -8,7 +8,6 @@
 .externalNativeBuild
 .cxx
 local.properties
-
 .kotlin/
 *.hprof
 Thumbs.db
@@ -20,3 +19,4 @@ Desktop.ini
 keystore.properties
 signing.properties
 app/src/main/assets/dictionary/
+.cursor
