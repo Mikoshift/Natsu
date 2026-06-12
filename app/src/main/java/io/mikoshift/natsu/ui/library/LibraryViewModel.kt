@@ -13,7 +13,7 @@ import kotlinx.coroutines.launch
 
 data class LibraryUiState(
     val isImporting: Boolean = false,
-    val errorMessage: String? = null,
+    val error: Throwable? = null,
 )
 
 class LibraryViewModel(
@@ -32,7 +32,7 @@ class LibraryViewModel(
 
     fun importBook(uri: Uri, displayName: String?) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isImporting = true, errorMessage = null)
+            _uiState.value = _uiState.value.copy(isImporting = true, error = null)
             documentRepository.importBook(uri, displayName)
                 .onSuccess {
                     _uiState.value = _uiState.value.copy(isImporting = false)
@@ -40,7 +40,7 @@ class LibraryViewModel(
                 .onFailure { error ->
                     _uiState.value = _uiState.value.copy(
                         isImporting = false,
-                        errorMessage = error.message ?: "Import failed",
+                        error = error,
                     )
                 }
         }
@@ -50,9 +50,7 @@ class LibraryViewModel(
         viewModelScope.launch {
             documentRepository.renameDocument(id, title)
                 .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = error.message ?: "Rename failed",
-                    )
+                    _uiState.value = _uiState.value.copy(error = error)
                 }
         }
     }
@@ -61,15 +59,13 @@ class LibraryViewModel(
         viewModelScope.launch {
             documentRepository.deleteDocument(id)
                 .onFailure { error ->
-                    _uiState.value = _uiState.value.copy(
-                        errorMessage = error.message ?: "Delete failed",
-                    )
+                    _uiState.value = _uiState.value.copy(error = error)
                 }
         }
     }
 
     fun clearError() {
-        _uiState.value = _uiState.value.copy(errorMessage = null)
+        _uiState.value = _uiState.value.copy(error = null)
     }
 
     fun refreshDocuments() {

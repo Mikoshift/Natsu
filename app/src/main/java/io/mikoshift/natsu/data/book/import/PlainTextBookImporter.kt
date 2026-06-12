@@ -10,7 +10,6 @@ import io.mikoshift.natsu.domain.model.reading.BookManifest
 import io.mikoshift.natsu.domain.model.reading.ManifestSection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.nio.charset.StandardCharsets
 
 class PlainTextBookImporter(
     private val context: Context,
@@ -28,7 +27,7 @@ class PlainTextBookImporter(
         withContext(Dispatchers.IO) {
             runCatching {
                 val title = resolveTitle(uri, displayName)
-                val content = readUtf8Text(uri)
+                val content = readText(uri)
                 val bookDir = bookStorage.createBookDirectory()
                 bookStorage.writeContentFile(
                     bookDir = bookDir,
@@ -72,14 +71,13 @@ class PlainTextBookImporter(
         return "Untitled"
     }
 
-    private fun readUtf8Text(uri: Uri): String {
+    private fun readText(uri: Uri): String {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw IllegalStateException("Cannot open file")
-        val text = String(bytes, StandardCharsets.UTF_8)
-        if (text.contains('\uFFFD')) {
-            throw IllegalArgumentException("File must be UTF-8 encoded")
+            ?: throw CannotOpenFileException()
+        if (bytes.isEmpty()) {
+            throw EmptyFileException()
         }
-        return text.replace("\r\n", "\n").replace('\r', '\n')
+        return TextCharsetDecoder.decode(bytes).text
     }
 
     private fun stripExtension(name: String): String {

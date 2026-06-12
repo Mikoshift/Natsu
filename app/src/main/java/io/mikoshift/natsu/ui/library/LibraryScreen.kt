@@ -42,8 +42,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.content.Context
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -52,6 +54,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.mikoshift.natsu.R
+import io.mikoshift.natsu.data.book.import.BookImportException
+import io.mikoshift.natsu.data.book.import.CannotOpenFileException
+import io.mikoshift.natsu.data.book.import.EmptyFileException
+import io.mikoshift.natsu.data.book.import.UnsupportedFormatException
+import io.mikoshift.natsu.data.book.import.UnsupportedTextEncodingException
 import io.mikoshift.natsu.domain.model.Document
 import io.mikoshift.natsu.domain.model.hasReadingProgress
 import io.mikoshift.natsu.domain.model.readingProgressPercent
@@ -69,6 +76,7 @@ fun LibraryScreen(
     val documents by viewModel.documents.collectAsStateWithLifecycle()
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
     val openDrawer = LocalDrawerOpen.current
     val lifecycleOwner = LocalLifecycleOwner.current
 
@@ -91,9 +99,9 @@ fun LibraryScreen(
         uri?.let { viewModel.importBook(it, null) }
     }
 
-    LaunchedEffect(uiState.errorMessage) {
-        uiState.errorMessage?.let { message ->
-            snackbarHostState.showSnackbar(message)
+    LaunchedEffect(uiState.error) {
+        uiState.error?.let { error ->
+            snackbarHostState.showSnackbar(resolveLibraryErrorMessage(context, error))
             viewModel.clearError()
         }
     }
@@ -311,6 +319,18 @@ private fun RenameDocumentDialog(
             }
         },
     )
+}
+
+private fun resolveLibraryErrorMessage(context: Context, error: Throwable): String {
+    val importError = error as? BookImportException ?: error.cause as? BookImportException
+    return when (importError) {
+        is CannotOpenFileException -> context.getString(R.string.import_error_cannot_open)
+        is EmptyFileException -> context.getString(R.string.import_error_empty)
+        is UnsupportedTextEncodingException -> context.getString(R.string.import_error_unsupported_encoding)
+        is UnsupportedFormatException -> context.getString(R.string.import_error_unsupported_format)
+        else -> error.message?.takeIf { it.isNotBlank() }
+            ?: context.getString(R.string.import_error_generic)
+    }
 }
 
 @Composable
