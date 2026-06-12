@@ -28,6 +28,16 @@ body.natsu-chapter {
   -webkit-text-size-adjust: 100%;
   word-break: normal;
   overflow-wrap: anywhere;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: manipulation;
+}
+
+body.natsu-chapter * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 body.natsu-chapter p {

@@ -3,17 +3,25 @@ import { DOMTextScanner, isWhitespace, pointInAnyRect } from "./dom-text-scanner
 import { extractLayoutText, layoutOffsetAtRange } from "./layout-text.js";
 import { snapToContentOffset } from "./snap-offset.js";
 
-const BLOCK_TAGS = /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i;
+const PREFERRED_BLOCK_TAGS = new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
 
 export function findParagraphElement(node: Node): HTMLElement | null {
   let current: Node | null = node;
+  let divFallback: HTMLElement | null = null;
   while (current && current !== document.body) {
-    if (current.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.test((current as Element).tagName)) {
-      return current as HTMLElement;
+    if (current.nodeType === Node.ELEMENT_NODE) {
+      const element = current as HTMLElement;
+      const tag = element.tagName.toUpperCase();
+      if (PREFERRED_BLOCK_TAGS.has(tag)) {
+        return element;
+      }
+      if (tag === "DIV" && divFallback === null) {
+        divFallback = element;
+      }
     }
     current = current.parentNode;
   }
-  return null;
+  return divFallback;
 }
 
 function caretRangeFromPoint(clientX: number, clientY: number): Range | null {
@@ -86,7 +94,8 @@ function rangeFromPoint(clientX: number, clientY: number): Range | null {
   if (isPointInRange(clientX, clientY, range)) {
     return range;
   }
-  return null;
+  // Android WebView often reports unreliable client rects; keep the caret hit.
+  return range;
 }
 
 export function getTapContext(clientX: number, clientY: number): TapContext | null {

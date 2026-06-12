@@ -386,16 +386,24 @@
   }
 
   // reader/src/text/range-from-point.ts
-  var BLOCK_TAGS = /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i;
+  var PREFERRED_BLOCK_TAGS = /* @__PURE__ */ new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
   function findParagraphElement(node) {
     let current = node;
+    let divFallback = null;
     while (current && current !== document.body) {
-      if (current.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.test(current.tagName)) {
-        return current;
+      if (current.nodeType === Node.ELEMENT_NODE) {
+        const element = current;
+        const tag = element.tagName.toUpperCase();
+        if (PREFERRED_BLOCK_TAGS.has(tag)) {
+          return element;
+        }
+        if (tag === "DIV" && divFallback === null) {
+          divFallback = element;
+        }
       }
       current = current.parentNode;
     }
-    return null;
+    return divFallback;
   }
   function caretRangeFromPoint(clientX, clientY) {
     const doc = document;
@@ -451,7 +459,7 @@
     if (isPointInRange(clientX, clientY, range)) {
       return range;
     }
-    return null;
+    return range;
   }
   function getTapContext(clientX, clientY) {
     const range = rangeFromPoint(clientX, clientY);
@@ -502,14 +510,35 @@
     const ratio = scrollHeight > 0 ? doc.scrollTop / scrollHeight : 0;
     callBridge("onScrollProgress", ratio);
   }
+  function clearNativeSelection() {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      selection.removeAllRanges();
+    }
+  }
   function handleWordTap(clientX, clientY) {
     const result = getTapContext(clientX, clientY);
+    clearNativeSelection();
     if (!result) {
       return;
     }
     callBridge("onWordTap", result.text, result.charOffset);
   }
   function installEventListeners() {
+    document.addEventListener(
+      "selectstart",
+      (event) => {
+        event.preventDefault();
+      },
+      true
+    );
+    document.addEventListener(
+      "contextmenu",
+      (event) => {
+        event.preventDefault();
+      },
+      true
+    );
     document.addEventListener(
       "touchstart",
       (event) => {
@@ -533,6 +562,7 @@
         if (dx * dx + dy * dy > TAP_MOVE_THRESHOLD_PX * TAP_MOVE_THRESHOLD_PX) {
           return;
         }
+        clearNativeSelection();
         if (!canTapAtPoint(touch.clientX, touch.clientY)) {
           return;
         }
@@ -546,8 +576,10 @@
       "click",
       (event) => {
         if (Date.now() - lastTouchTapAt < TAP_CLICK_SUPPRESS_MS) {
+          event.preventDefault();
           return;
         }
+        clearNativeSelection();
         handleWordTap(event.clientX, event.clientY);
       },
       true
