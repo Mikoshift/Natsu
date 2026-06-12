@@ -13,6 +13,8 @@ sealed interface ReaderBlockContent {
 }
 
 data class ReaderDisplayItem(
+    val sectionId: String,
+    val blockIndex: Int,
     val layoutParagraphIndex: Int?,
     val content: ReaderBlockContent,
 )

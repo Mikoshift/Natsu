@@ -5,7 +5,9 @@ import io.mikoshift.natsu.data.book.BookStorage
 import io.mikoshift.natsu.data.book.load.ManifestReadingContentLoader
 import io.mikoshift.natsu.data.local.DocumentLocalStore
 import io.mikoshift.natsu.data.reader.ReadingLayoutBuilder
+import io.mikoshift.natsu.data.reader.SearchIndexBuilder
 import io.mikoshift.natsu.domain.model.Document
+import io.mikoshift.natsu.domain.model.reading.ReadingLocator
 import io.mikoshift.natsu.domain.repository.DocumentRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -18,6 +20,7 @@ class DocumentRepositoryImpl(
     private val bookStorage: BookStorage,
     private val manifestReadingContentLoader: ManifestReadingContentLoader,
     private val readingLayoutBuilder: ReadingLayoutBuilder,
+    private val searchIndexBuilder: SearchIndexBuilder = SearchIndexBuilder(),
 ) : DocumentRepository {
 
     override fun observeDocuments(): Flow<List<Document>> = flow {
@@ -35,12 +38,17 @@ class DocumentRepositoryImpl(
         displayName: String?,
     ): Result<Document> =
         bookImportCoordinator.import(uri, displayName).mapCatching { imported ->
+            val bookDir = bookStorage.validatedBookDirectory(imported.id, imported.storagePath)
             val readingBook = manifestReadingContentLoader.load(
                 documentId = imported.id,
                 storagePath = imported.storagePath,
                 title = imported.title,
             ).getOrThrow()
             val layout = readingLayoutBuilder.build(readingBook)
+            val searchIndex = searchIndexBuilder.build(readingBook).copy(
+                totalCharCount = layout.canonicalText.length,
+            )
+            bookStorage.writeSearchIndex(bookDir, searchIndex)
             val document = Document(
                 id = imported.id,
                 title = imported.title,
@@ -50,6 +58,7 @@ class DocumentRepositoryImpl(
                 charCount = layout.canonicalText.length,
                 lastReadCharOffset = 0,
                 lastReadParagraphIndex = 0,
+                lastReadLocator = null,
             )
             documentLocalStore.insert(document)
             document
@@ -80,10 +89,16 @@ class DocumentRepositoryImpl(
 
     override suspend fun updateReadingPosition(
         documentId: String,
-        charOffset: Int,
+        globalCharOffset: Int,
         paragraphIndex: Int,
+        locator: ReadingLocator?,
     ) {
-        documentLocalStore.updateReadingPosition(documentId, charOffset, paragraphIndex)
+        documentLocalStore.updateReadingPosition(
+            id = documentId,
+            globalCharOffset = globalCharOffset,
+            paragraphIndex = paragraphIndex,
+            locator = locator,
+        )
     }
 
     override suspend fun ensureCharCount(documentId: String, charCount: Int) {

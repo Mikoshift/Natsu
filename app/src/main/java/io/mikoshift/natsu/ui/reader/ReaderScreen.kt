@@ -94,6 +94,17 @@ fun ReaderScreen(
             .collect { index -> viewModel.saveReadingPosition(index) }
     }
 
+    LaunchedEffect(contentReady, listState) {
+        if (!contentReady) return@LaunchedEffect
+        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+            .distinctUntilChanged()
+            .collect { index ->
+                if (index != null) {
+                    viewModel.onNearEnd(index)
+                }
+            }
+    }
+
     DisposableEffect(contentReady) {
         onDispose {
             if (contentReady) {
@@ -117,7 +128,7 @@ fun ReaderScreen(
                             ReaderSearchBar(
                                 query = uiState.searchQuery,
                                 matchIndex = uiState.searchMatchIndex,
-                                matchCount = uiState.searchMatchOffsets.size,
+                                matchCount = uiState.searchMatches.size,
                                 onQueryChange = viewModel::updateSearchQuery,
                                 onPreviousMatch = viewModel::goToPreviousSearchMatch,
                                 onNextMatch = viewModel::goToNextSearchMatch,

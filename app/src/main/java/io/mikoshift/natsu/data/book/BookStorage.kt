@@ -6,6 +6,9 @@ import com.google.gson.GsonBuilder
 import io.mikoshift.natsu.domain.model.reading.BookFormat
 import io.mikoshift.natsu.domain.model.reading.BookManifest
 import io.mikoshift.natsu.domain.model.reading.ManifestSection
+import io.mikoshift.natsu.domain.model.reading.SearchIndex
+import io.mikoshift.natsu.domain.model.reading.SearchIndexParagraph
+import io.mikoshift.natsu.domain.model.reading.SectionCharOffset
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.UUID
@@ -66,6 +69,18 @@ class BookStorage private constructor(
         contentFile.writeText(content, StandardCharsets.UTF_8)
     }
 
+    fun writeSearchIndex(bookDir: File, searchIndex: SearchIndex) {
+        val indexFile = File(bookDir, SEARCH_INDEX_FILE_NAME)
+        indexFile.writeText(gson.toJson(searchIndex.toJsonModel()), StandardCharsets.UTF_8)
+    }
+
+    fun readSearchIndex(bookDir: File): SearchIndex? {
+        val indexFile = File(bookDir, SEARCH_INDEX_FILE_NAME)
+        if (!indexFile.exists()) return null
+        val json = indexFile.readText(StandardCharsets.UTF_8)
+        return gson.fromJson(json, SearchIndexJson::class.java)?.toDomain()
+    }
+
     fun deleteBookPackage(storagePath: String) {
         val bookDir = BookPathResolver.requireUnderBooksRoot(booksRoot, storagePath)
         bookDir.deleteRecursively()
@@ -73,6 +88,7 @@ class BookStorage private constructor(
 
     companion object {
         const val MANIFEST_FILE_NAME = "manifest.json"
+        const val SEARCH_INDEX_FILE_NAME = "search_index.json"
         const val PLAIN_TEXT_CONTENT_PATH = "content.txt"
         const val MARKDOWN_CONTENT_PATH = "content.md"
         const val MAX_CONTENT_BYTES = 50 * 1024 * 1024
@@ -102,6 +118,68 @@ private fun BookManifest.toJsonModel(): ManifestJson =
                 id = section.id,
                 title = section.title,
                 path = section.path,
+            )
+        },
+    )
+
+private data class SearchIndexJson(
+    val version: Int,
+    val totalCharCount: Int,
+    val sectionOffsets: List<SectionCharOffsetJson>,
+    val paragraphs: List<SearchIndexParagraphJson>,
+)
+
+private data class SectionCharOffsetJson(
+    val sectionId: String,
+    val globalCharOffset: Int,
+    val charCount: Int,
+)
+
+private data class SearchIndexParagraphJson(
+    val sectionId: String,
+    val blockIndex: Int,
+    val globalCharOffset: Int,
+    val text: String,
+)
+
+private fun SearchIndex.toJsonModel(): SearchIndexJson =
+    SearchIndexJson(
+        version = version,
+        totalCharCount = totalCharCount,
+        sectionOffsets = sectionOffsets.map { offset ->
+            SectionCharOffsetJson(
+                sectionId = offset.sectionId,
+                globalCharOffset = offset.globalCharOffset,
+                charCount = offset.charCount,
+            )
+        },
+        paragraphs = paragraphs.map { paragraph ->
+            SearchIndexParagraphJson(
+                sectionId = paragraph.sectionId,
+                blockIndex = paragraph.blockIndex,
+                globalCharOffset = paragraph.globalCharOffset,
+                text = paragraph.text,
+            )
+        },
+    )
+
+private fun SearchIndexJson.toDomain(): SearchIndex =
+    SearchIndex(
+        version = version,
+        totalCharCount = totalCharCount,
+        sectionOffsets = sectionOffsets.map { offset ->
+            SectionCharOffset(
+                sectionId = offset.sectionId,
+                globalCharOffset = offset.globalCharOffset,
+                charCount = offset.charCount,
+            )
+        },
+        paragraphs = paragraphs.map { paragraph ->
+            SearchIndexParagraph(
+                sectionId = paragraph.sectionId,
+                blockIndex = paragraph.blockIndex,
+                globalCharOffset = paragraph.globalCharOffset,
+                text = paragraph.text,
             )
         },
     )

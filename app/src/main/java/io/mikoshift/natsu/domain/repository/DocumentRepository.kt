@@ -2,6 +2,7 @@ package io.mikoshift.natsu.domain.repository
 
 import android.net.Uri
 import io.mikoshift.natsu.domain.model.Document
+import io.mikoshift.natsu.domain.model.reading.ReadingLocator
 import kotlinx.coroutines.flow.Flow
 
 interface DocumentRepository {
@@ -17,8 +18,9 @@ interface DocumentRepository {
 
     suspend fun updateReadingPosition(
         documentId: String,
-        charOffset: Int,
+        globalCharOffset: Int,
         paragraphIndex: Int,
+        locator: ReadingLocator? = null,
     )
 
     suspend fun ensureCharCount(documentId: String, charCount: Int)

@@ -3,6 +3,8 @@ package io.mikoshift.natsu.data.reader
 import io.mikoshift.natsu.domain.model.reading.ReadingBlock
 import io.mikoshift.natsu.domain.model.reading.ReadingBook
 import io.mikoshift.natsu.domain.model.reading.ReadingLayout
+import io.mikoshift.natsu.domain.model.reading.ReadingSection
+import io.mikoshift.natsu.domain.model.reading.SectionLayout
 import io.mikoshift.natsu.domain.model.reading.contributesLayoutParagraph
 
 /**
@@ -27,24 +29,12 @@ class ReadingLayoutBuilder {
             if (sectionIndex > 0 && paragraphs.isNotEmpty()) {
                 sectionBoundaries.add(paragraphs.size)
             }
-
-            section.blocks.forEach { block ->
-                if (!block.contributesLayoutParagraph()) return@forEach
-
-                val paragraphText = when (block) {
-                    is ReadingBlock.Paragraph ->
-                        block.spans.joinToString(separator = "") { it.text }
-                    is ReadingBlock.Heading -> block.text
-                    is ReadingBlock.Image -> return@forEach
-                }
-
-                if (canonicalBuilder.isNotEmpty()) {
-                    canonicalBuilder.append('\n')
-                }
-                paragraphStartOffsets.add(canonicalBuilder.length)
-                canonicalBuilder.append(paragraphText)
-                paragraphs.add(paragraphText)
-            }
+            appendSection(
+                section = section,
+                paragraphs = paragraphs,
+                paragraphStartOffsets = paragraphStartOffsets,
+                canonicalBuilder = canonicalBuilder,
+            )
         }
 
         return ReadingLayout(
@@ -54,6 +44,67 @@ class ReadingLayoutBuilder {
             sectionBoundaries = sectionBoundaries,
         )
     }
+
+    fun buildSection(section: ReadingSection): SectionLayout {
+        val paragraphs = mutableListOf<String>()
+        val paragraphStartOffsets = mutableListOf<Int>()
+        val blockIndexByParagraph = mutableListOf<Int>()
+        val canonicalBuilder = StringBuilder()
+
+        section.blocks.forEachIndexed { blockIndex, block ->
+            if (!block.contributesLayoutParagraph()) return@forEachIndexed
+            val paragraphText = paragraphText(block) ?: return@forEachIndexed
+            if (canonicalBuilder.isNotEmpty()) {
+                canonicalBuilder.append('\n')
+            }
+            paragraphStartOffsets.add(canonicalBuilder.length)
+            canonicalBuilder.append(paragraphText)
+            paragraphs.add(paragraphText)
+            blockIndexByParagraph.add(blockIndex)
+        }
+
+        return SectionLayout(
+            sectionId = section.id,
+            paragraphs = paragraphs,
+            canonicalText = canonicalBuilder.toString(),
+            paragraphStartOffsets = paragraphStartOffsets,
+            blockIndexByParagraph = blockIndexByParagraph,
+        )
+    }
+
+    private fun appendSection(
+        section: ReadingSection,
+        paragraphs: MutableList<String>,
+        paragraphStartOffsets: MutableList<Int>,
+        canonicalBuilder: StringBuilder,
+    ) {
+        section.blocks.forEach { block ->
+            if (!block.contributesLayoutParagraph()) return@forEach
+            val paragraphText = paragraphText(block) ?: return@forEach
+            if (canonicalBuilder.isNotEmpty()) {
+                canonicalBuilder.append('\n')
+            }
+            paragraphStartOffsets.add(canonicalBuilder.length)
+            canonicalBuilder.append(paragraphText)
+            paragraphs.add(paragraphText)
+        }
+    }
+
+    private fun paragraphText(block: ReadingBlock): String? =
+        when (block) {
+            is ReadingBlock.Paragraph ->
+                block.spans.joinToString(separator = "") { it.text }
+            is ReadingBlock.Heading -> block.text
+            is ReadingBlock.Image -> null
+        }
+}
+
+/** Maps a [SectionLayout.canonicalText] offset to the containing paragraph index. */
+fun SectionLayout.paragraphIndexForCharOffset(charOffset: Int): Int {
+    if (paragraphs.isEmpty()) return 0
+    if (charOffset <= 0) return 0
+    val index = paragraphStartOffsets.indexOfLast { it <= charOffset }
+    return if (index >= 0) index else 0
 }
 
 /** Maps a [ReadingLayout.canonicalText] offset to the containing paragraph index. */

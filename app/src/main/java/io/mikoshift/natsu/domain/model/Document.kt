@@ -1,6 +1,7 @@
 package io.mikoshift.natsu.domain.model
 
 import io.mikoshift.natsu.domain.model.reading.BookFormat
+import io.mikoshift.natsu.domain.model.reading.ReadingLocator
 
 data class Document(
     val id: String,
@@ -9,13 +10,15 @@ data class Document(
     val sourceFormat: BookFormat,
     val importedAt: Long,
     val charCount: Int,
+    /** Global offset in flattened canonical text; used for progress percentage. */
     val lastReadCharOffset: Int,
-    /** Legacy fallback when [lastReadCharOffset] is still zero after DB migration. */
+    /** Legacy fallback when [lastReadLocator] and [lastReadCharOffset] are unset. */
     val lastReadParagraphIndex: Int,
+    val lastReadLocator: ReadingLocator? = null,
 )
 
 fun Document.hasReadingProgress(): Boolean =
-    lastReadCharOffset > 0 || lastReadParagraphIndex > 0
+    lastReadLocator != null || lastReadCharOffset > 0 || lastReadParagraphIndex > 0
 
 fun Document.readingProgressPercent(): Int? {
     if (charCount <= 0) return null
