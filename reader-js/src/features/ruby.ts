@@ -1,12 +1,13 @@
+import type { RubyToken } from "../types.js";
 import { createInjectableTextWalker, collectTextRoot } from "../text/walker.js";
 
-export function injectRuby(tokens) {
-  if (!tokens || !tokens.length) {
+export function injectRuby(tokens: RubyToken[] | null | undefined): void {
+  if (!tokens?.length) {
     return;
   }
   const root = collectTextRoot();
   tokens.forEach((token) => {
-    if (!token || !token.surface || !token.reading) {
+    if (!token.surface || !token.reading) {
       return;
     }
     const walker = createInjectableTextWalker(root);

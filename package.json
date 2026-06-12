@@ -4,9 +4,11 @@
   "type": "module",
   "scripts": {
     "reader:build": "node reader-js/esbuild.config.mjs",
+    "reader:typecheck": "tsc -p reader-js/tsconfig.json",
     "reader:test": "vitest run --config reader-js/vitest.config.mjs",
     "reader:lint": "eslint reader-js/src/",
     "reader:lint:fix": "eslint reader-js/src/ --fix",
+    "reader:check": "npm run reader:typecheck && npm run reader:lint && npm run reader:test",
     "reader:format": "prettier --write reader-js/",
     "reader:format:check": "prettier --check reader-js/"
   },
@@ -16,6 +18,8 @@
     "eslint": "^10.4.1",
     "jsdom": "^26.0.0",
     "prettier": "^3.8.4",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.32.0",
     "vitest": "^3.0.0"
   }
 }

@@ -10,7 +10,7 @@ let touchStartX = 0;
 let touchStartY = 0;
 let lastTouchTapAt = 0;
 
-function notifyScrollProgress() {
+function notifyScrollProgress(): void {
   const now = Date.now();
   if (now - lastScrollNotify < SCROLL_THROTTLE_MS) {
     return;
@@ -22,7 +22,7 @@ function notifyScrollProgress() {
   callBridge("onScrollProgress", ratio);
 }
 
-function handleWordTap(clientX, clientY) {
+function handleWordTap(clientX: number, clientY: number): void {
   const result = getTapContext(clientX, clientY);
   if (!result) {
     return;
@@ -30,7 +30,7 @@ function handleWordTap(clientX, clientY) {
   callBridge("onWordTap", result.text, result.charOffset);
 }
 
-export function installEventListeners() {
+export function installEventListeners(): void {
   document.addEventListener(
     "touchstart",
     (event) => {

@@ -5,11 +5,12 @@ import { injectRuby } from "./features/ruby.js";
 import { scrollToOffset } from "./features/scroll.js";
 import { installMessageListener, scheduleReaderInit } from "./messages.js";
 import { applyTheme } from "./theme.js";
+import type { ReaderApi } from "./types.js";
 
 (function () {
   "use strict";
 
-  const reader = {
+  const reader: ReaderApi = {
     init() {
       if (window.__natsuReaderInitialized) {
         return;

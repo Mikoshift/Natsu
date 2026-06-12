@@ -18,7 +18,7 @@ const bridgeOut = join(outDir, "bridge.js");
 mkdirSync(dirname(bridgeOut), { recursive: true });
 await esbuild.build({
   ...common,
-  entryPoints: [join(readerJsDir, "src/index.js")],
+  entryPoints: [join(readerJsDir, "src/index.ts")],
   outfile: bridgeOut,
 });
 

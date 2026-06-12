@@ -1,4 +1,6 @@
-export function applyTheme(vars) {
+import type { ThemeVars } from "./types.js";
+
+export function applyTheme(vars: ThemeVars | null | undefined): void {
   if (!vars) {
     return;
   }

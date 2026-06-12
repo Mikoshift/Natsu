@@ -1,6 +1,13 @@
+import type { SearchRange } from "../types.js";
 import { createVisibleTextWalker, collectTextRoot } from "../text/walker.js";
 
-export function clearHighlights() {
+interface HighlightSegment {
+  node: Text;
+  localStart: number;
+  localEnd: number;
+}
+
+export function clearHighlights(): void {
   document.querySelectorAll("mark.natsu-search-highlight").forEach((mark) => {
     const parent = mark.parentNode;
     if (!parent) {
@@ -14,18 +21,23 @@ export function clearHighlights() {
   });
 }
 
-function highlightRange(root, start, end) {
-  const segments = [];
+function highlightRange(root: Node, start: number, end: number): void {
+  const segments: HighlightSegment[] = [];
   let current = 0;
   const walker = createVisibleTextWalker(root);
   let node = walker.nextNode();
   while (node) {
-    const length = (node.textContent || "").length;
+    if (node.nodeType !== Node.TEXT_NODE) {
+      node = walker.nextNode();
+      continue;
+    }
+    const textNode = node as Text;
+    const length = (textNode.textContent || "").length;
     const nodeStart = current;
     const nodeEnd = current + length;
     if (end > nodeStart && start < nodeEnd) {
       segments.push({
-        node,
+        node: textNode,
         localStart: Math.max(0, start - nodeStart),
         localEnd: Math.min(length, end - nodeStart),
       });
@@ -40,7 +52,7 @@ function highlightRange(root, start, end) {
     if (localLength <= 0) {
       continue;
     }
-    let textNode = seg.node;
+    const textNode = seg.node;
     if (seg.localEnd < textNode.length) {
       textNode.splitText(seg.localEnd);
     }
@@ -50,19 +62,19 @@ function highlightRange(root, start, end) {
     }
     const mark = document.createElement("mark");
     mark.className = "natsu-search-highlight";
-    highlightNode.parentNode.replaceChild(mark, highlightNode);
+    highlightNode.parentNode?.replaceChild(mark, highlightNode);
     mark.appendChild(highlightNode);
   }
 }
 
-export function highlightSearch(ranges) {
+export function highlightSearch(ranges: SearchRange[] | null | undefined): void {
   clearHighlights();
-  if (!ranges || !ranges.length) {
+  if (!ranges?.length) {
     return;
   }
   const root = collectTextRoot();
   ranges.forEach((range) => {
-    if (range == null || range.start == null || range.end == null) {
+    if (range.start == null || range.end == null) {
       return;
     }
     highlightRange(root, range.start, range.end);

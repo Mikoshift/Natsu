@@ -1,6 +1,10 @@
+"use strict";
 (() => {
-  // reader-js/src/native-bridge.js
+  // reader-js/src/types.ts
+  var WEB_MESSAGE_TYPE = "natsu-reader-call";
   var BRIDGE_NAME = "NatsuBridge";
+
+  // reader-js/src/native-bridge.ts
   function bridge() {
     return window[BRIDGE_NAME];
   }
@@ -11,14 +15,14 @@
     }
   }
 
-  // reader-js/src/text/walker.js
+  // reader-js/src/text/walker.ts
   function collectTextRoot() {
     return document.body || document.documentElement;
   }
   function isInsideTag(node, root, tagName) {
     let parent = node.parentNode;
     while (parent && parent !== root) {
-      if (parent.nodeType === Node.ELEMENT_NODE && parent.tagName.toLowerCase() === tagName) {
+      if (parent.nodeType === Node.ELEMENT_NODE && parent.nodeName.toLowerCase() === tagName) {
         return true;
       }
       parent = parent.parentNode;
@@ -48,7 +52,7 @@
     });
   }
 
-  // reader-js/src/text/offset.js
+  // reader-js/src/text/offset.ts
   function charOffsetInParagraph(paragraph, range) {
     const pre = document.createRange();
     pre.selectNodeContents(paragraph);
@@ -95,10 +99,11 @@
     return null;
   }
 
-  // reader-js/src/text/range-from-point.js
+  // reader-js/src/text/range-from-point.ts
   function findTextNodeInElement(element) {
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
-    return walker.nextNode();
+    const node = walker.nextNode();
+    return (node == null ? void 0 : node.nodeType) === Node.TEXT_NODE ? node : null;
   }
   function findParagraphElement(node) {
     let current = node;
@@ -155,7 +160,7 @@
     };
   }
 
-  // reader-js/src/events.js
+  // reader-js/src/events.ts
   var SCROLL_THROTTLE_MS = 400;
   var TAP_MOVE_THRESHOLD_PX = 10;
   var TAP_CLICK_SUPPRESS_MS = 400;
@@ -227,7 +232,7 @@
     window.addEventListener("scroll", notifyScrollProgress, { passive: true });
   }
 
-  // reader-js/src/features/highlight.js
+  // reader-js/src/features/highlight.ts
   function clearHighlights() {
     document.querySelectorAll("mark.natsu-search-highlight").forEach((mark) => {
       const parent = mark.parentNode;
@@ -242,17 +247,23 @@
     });
   }
   function highlightRange(root, start, end) {
+    var _a;
     const segments = [];
     let current = 0;
     const walker = createVisibleTextWalker(root);
     let node = walker.nextNode();
     while (node) {
-      const length = (node.textContent || "").length;
+      if (node.nodeType !== Node.TEXT_NODE) {
+        node = walker.nextNode();
+        continue;
+      }
+      const textNode = node;
+      const length = (textNode.textContent || "").length;
       const nodeStart = current;
       const nodeEnd = current + length;
       if (end > nodeStart && start < nodeEnd) {
         segments.push({
-          node,
+          node: textNode,
           localStart: Math.max(0, start - nodeStart),
           localEnd: Math.min(length, end - nodeStart)
         });
@@ -266,7 +277,7 @@
       if (localLength <= 0) {
         continue;
       }
-      let textNode = seg.node;
+      const textNode = seg.node;
       if (seg.localEnd < textNode.length) {
         textNode.splitText(seg.localEnd);
       }
@@ -276,32 +287,32 @@
       }
       const mark = document.createElement("mark");
       mark.className = "natsu-search-highlight";
-      highlightNode.parentNode.replaceChild(mark, highlightNode);
+      (_a = highlightNode.parentNode) == null ? void 0 : _a.replaceChild(mark, highlightNode);
       mark.appendChild(highlightNode);
     }
   }
   function highlightSearch(ranges) {
     clearHighlights();
-    if (!ranges || !ranges.length) {
+    if (!(ranges == null ? void 0 : ranges.length)) {
       return;
     }
     const root = collectTextRoot();
     ranges.forEach((range) => {
-      if (range == null || range.start == null || range.end == null) {
+      if (range.start == null || range.end == null) {
         return;
       }
       highlightRange(root, range.start, range.end);
     });
   }
 
-  // reader-js/src/features/ruby.js
+  // reader-js/src/features/ruby.ts
   function injectRuby(tokens) {
-    if (!tokens || !tokens.length) {
+    if (!(tokens == null ? void 0 : tokens.length)) {
       return;
     }
     const root = collectTextRoot();
     tokens.forEach((token) => {
-      if (!token || !token.surface || !token.reading) {
+      if (!token.surface || !token.reading) {
         return;
       }
       const walker = createInjectableTextWalker(root);
@@ -342,7 +353,7 @@
     });
   }
 
-  // reader-js/src/features/scroll.js
+  // reader-js/src/features/scroll.ts
   function scrollToOffset(charOffset) {
     const root = collectTextRoot();
     const range = charOffsetToPoint(root, charOffset);
@@ -354,8 +365,7 @@
     window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
   }
 
-  // reader-js/src/messages.js
-  var WEB_MESSAGE_TYPE = "natsu-reader-call";
+  // reader-js/src/messages.ts
   function installMessageListener(api) {
     window.addEventListener("message", (event) => {
       let payload = event.data;
@@ -366,14 +376,15 @@
           return;
         }
       }
-      if (!payload || payload.type !== WEB_MESSAGE_TYPE) {
+      if (!payload || typeof payload !== "object" || !("type" in payload) || payload.type !== WEB_MESSAGE_TYPE || !("method" in payload) || typeof payload.method !== "string") {
         return;
       }
-      const fn = api[payload.method];
-      if (typeof fn !== "function") {
+      const method = payload.method;
+      if (typeof api[method] !== "function") {
         return;
       }
-      fn.apply(api, payload.args || []);
+      const args = "args" in payload && Array.isArray(payload.args) ? payload.args : [];
+      api[method].call(api, ...args);
     });
   }
   function scheduleReaderInit(init) {
@@ -384,7 +395,7 @@
     }
   }
 
-  // reader-js/src/theme.js
+  // reader-js/src/theme.ts
   function applyTheme(vars) {
     if (!vars) {
       return;
@@ -415,7 +426,7 @@
     }
   }
 
-  // reader-js/src/index.js
+  // reader-js/src/index.ts
   (function() {
     "use strict";
     const reader = {

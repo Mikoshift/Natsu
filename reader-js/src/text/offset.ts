@@ -1,6 +1,6 @@
 import { createVisibleTextWalker } from "./walker.js";
 
-export function charOffsetInParagraph(paragraph, range) {
+export function charOffsetInParagraph(paragraph: Node, range: Range): number {
   const pre = document.createRange();
   pre.selectNodeContents(paragraph);
   pre.setEnd(range.startContainer, range.startOffset);
@@ -11,7 +11,7 @@ export function charOffsetInParagraph(paragraph, range) {
  * Char offset of `range` within `paragraph.innerText`.
  * Skips `<rt>` so offsets match Kotlin tokenization and visible text.
  */
-export function innerTextOffsetInParagraph(paragraph, range) {
+export function innerTextOffsetInParagraph(paragraph: Node, range: Range): number {
   const targetNode = range.startContainer;
   const targetOffset = range.startOffset;
   let offset = 0;
@@ -34,7 +34,7 @@ export function innerTextOffsetInParagraph(paragraph, range) {
 }
 
 /** Map a section-local visible char offset to a collapsed DOM Range. */
-export function charOffsetToPoint(root, targetOffset) {
+export function charOffsetToPoint(root: Node, targetOffset: number): Range | null {
   let current = 0;
   const walker = createVisibleTextWalker(root);
   let node = walker.nextNode();

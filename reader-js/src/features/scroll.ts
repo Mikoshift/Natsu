@@ -1,7 +1,7 @@
 import { charOffsetToPoint } from "../text/offset.js";
 import { collectTextRoot } from "../text/walker.js";
 
-export function scrollToOffset(charOffset) {
+export function scrollToOffset(charOffset: number): void {
   const root = collectTextRoot();
   const range = charOffsetToPoint(root, charOffset);
   if (!range) {

@@ -1,11 +1,11 @@
-export function collectTextRoot() {
+export function collectTextRoot(): HTMLElement {
   return document.body || document.documentElement;
 }
 
-export function isInsideTag(node, root, tagName) {
+export function isInsideTag(node: Node, root: Node, tagName: string): boolean {
   let parent = node.parentNode;
   while (parent && parent !== root) {
-    if (parent.nodeType === Node.ELEMENT_NODE && parent.tagName.toLowerCase() === tagName) {
+    if (parent.nodeType === Node.ELEMENT_NODE && parent.nodeName.toLowerCase() === tagName) {
       return true;
     }
     parent = parent.parentNode;
@@ -13,12 +13,12 @@ export function isInsideTag(node, root, tagName) {
   return false;
 }
 
-function createTextWalker(root, acceptNode) {
+function createTextWalker(root: Node, acceptNode: (node: Node) => number): TreeWalker {
   return document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode });
 }
 
 /** Text nodes visible to the user — skips furigana readings inside `<rt>`. */
-export function createVisibleTextWalker(root) {
+export function createVisibleTextWalker(root: Node): TreeWalker {
   return createTextWalker(root, (node) => {
     if (isInsideTag(node, root, "rt")) {
       return NodeFilter.FILTER_REJECT;
@@ -28,7 +28,7 @@ export function createVisibleTextWalker(root) {
 }
 
 /** Text nodes eligible for ruby injection — skips `<rt>` and existing `<ruby>`. */
-export function createInjectableTextWalker(root) {
+export function createInjectableTextWalker(root: Node): TreeWalker {
   return createTextWalker(root, (node) => {
     if (isInsideTag(node, root, "rt")) {
       return NodeFilter.FILTER_REJECT;

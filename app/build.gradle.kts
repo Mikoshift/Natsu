@@ -70,6 +70,7 @@ val compileReaderJs = tasks.register<Exec>("compileReaderJs") {
         rootProject.file("package.json"),
         rootProject.file("package-lock.json"),
         rootProject.file("reader-js/esbuild.config.mjs"),
+        rootProject.file("reader-js/tsconfig.json"),
         rootProject.file("reader-js/theme.css"),
     )
     outputs.files(

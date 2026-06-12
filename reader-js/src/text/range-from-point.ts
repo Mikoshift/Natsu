@@ -1,27 +1,31 @@
+import type { TapContext } from "../types.js";
 import { innerTextOffsetInParagraph } from "./offset.js";
 
-function findTextNodeInElement(element) {
+function findTextNodeInElement(element: Element): Text | null {
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
-  return walker.nextNode();
+  const node = walker.nextNode();
+  return node?.nodeType === Node.TEXT_NODE ? (node as Text) : null;
 }
 
-export function findParagraphElement(node) {
-  let current = node;
+export function findParagraphElement(node: Node): HTMLElement {
+  let current: Node | null = node;
   while (current && current !== document.body) {
     if (
       current.nodeType === Node.ELEMENT_NODE &&
-      /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i.test(current.tagName)
+      /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i.test((current as Element).tagName)
     ) {
-      return current;
+      return current as HTMLElement;
     }
     current = current.parentNode;
   }
   return document.body;
 }
 
-export function rangeFromPoint(clientX, clientY) {
-  const doc = document;
-  let range = null;
+export function rangeFromPoint(clientX: number, clientY: number): Range | null {
+  const doc = document as Document & {
+    caretRangeFromPoint?(x: number, y: number): Range | null;
+  };
+  let range: Range | null = null;
   if (doc.caretRangeFromPoint) {
     range = doc.caretRangeFromPoint(clientX, clientY);
   } else if (doc.caretPositionFromPoint) {
@@ -49,7 +53,7 @@ export function rangeFromPoint(clientX, clientY) {
   return range;
 }
 
-export function getTapContext(clientX, clientY) {
+export function getTapContext(clientX: number, clientY: number): TapContext | null {
   const range = rangeFromPoint(clientX, clientY);
   if (!range) {
     return null;
