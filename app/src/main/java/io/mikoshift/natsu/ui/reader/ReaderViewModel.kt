@@ -25,6 +25,7 @@ import io.mikoshift.natsu.domain.repository.ReadingContentRepository
 import io.mikoshift.natsu.domain.repository.TextTokenizer
 import io.mikoshift.natsu.data.settings.ReaderSettingsStore
 import io.mikoshift.natsu.ui.reader.web.ReaderWebUrls
+import io.mikoshift.natsu.ui.reader.web.ReaderWordTap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -187,10 +188,13 @@ class ReaderViewModel(
         )
     }
 
-    fun onWebWordTap(tappedText: String) {
-        if (tappedText.isBlank()) return
-        val tokens = textTokenizer.tokenize(tappedText)
-        val token = tokens.firstOrNull { it.isClickable } ?: tokens.firstOrNull() ?: return
+    fun onWebWordTap(paragraphText: String, charOffset: Int) {
+        if (paragraphText.isBlank()) return
+        val tokens = textTokenizer.tokenize(paragraphText)
+        val token = ReaderWordTap.tokenAtCharOffset(tokens, charOffset)
+            ?: tokens.firstOrNull { it.isClickable }
+            ?: tokens.firstOrNull()
+            ?: return
         onWordClicked(token)
     }
 

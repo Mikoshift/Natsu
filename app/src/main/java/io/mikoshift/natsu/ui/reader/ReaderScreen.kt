@@ -168,9 +168,12 @@ fun ReaderScreen(
                             searchHighlightRanges = uiState.searchHighlightRanges,
                             furiganaTokens = uiState.furiganaTokens,
                             controller = webViewController,
-                            onWordTap = { text, _, _ -> viewModel.onWebWordTap(text) },
+                            onWordTap = viewModel::onWebWordTap,
+                            onChapterReady = {
+                                webViewController.applyTheme(readerSettings)
+                                viewModel.onWebChapterReady()
+                            },
                             onScrollProgress = viewModel::onWebScrollProgress,
-                            onChapterReady = viewModel::onWebChapterReady,
                             onChapterLink = viewModel::onChapterLink,
                             modifier = Modifier.fillMaxSize(),
                         )

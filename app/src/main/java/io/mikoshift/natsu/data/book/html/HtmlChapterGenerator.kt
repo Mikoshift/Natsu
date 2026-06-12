@@ -33,6 +33,25 @@ object HtmlChapterGenerator {
             <head>
               <meta charset="utf-8">
               <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                :root {
+                  --natsu-font-size: 16px;
+                  --natsu-line-height: 1.8;
+                  --natsu-bg: #ffffff;
+                  --natsu-text: #1c1b1f;
+                }
+                body.natsu-chapter {
+                  margin: 0;
+                  padding: 12px 16px 32px;
+                  font-family: sans-serif;
+                  font-size: var(--natsu-font-size);
+                  line-height: var(--natsu-line-height);
+                  color: var(--natsu-text);
+                  background: var(--natsu-bg);
+                  -webkit-text-size-adjust: 100%;
+                }
+                body.natsu-chapter p { margin: 0 0 1em; }
+              </style>
             </head>
             <body class="natsu-chapter">
             $bodyHtml

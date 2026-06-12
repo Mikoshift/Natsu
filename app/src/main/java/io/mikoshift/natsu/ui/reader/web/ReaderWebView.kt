@@ -14,6 +14,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.webkit.WebSettingsCompat
+import androidx.webkit.WebViewFeature
 import io.mikoshift.natsu.domain.model.FuriganaMode
 import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.ui.reader.FuriganaInjectToken
@@ -31,7 +33,7 @@ fun ReaderWebView(
     searchHighlightRanges: List<IntRange>,
     furiganaTokens: List<FuriganaInjectToken>,
     controller: ReaderWebViewController,
-    onWordTap: (text: String, rangeStart: Int, rangeEnd: Int) -> Unit,
+    onWordTap: (paragraphText: String, charOffset: Int) -> Unit,
     onScrollProgress: (ratio: Float) -> Unit,
     onChapterReady: () -> Unit,
     onChapterLink: (relativePath: String) -> Unit,
@@ -97,6 +99,9 @@ fun ReaderWebView(
                 settings.useWideViewPort = true
                 settings.loadWithOverviewMode = true
                 settings.mixedContentMode = WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+                    WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
+                }
                 addJavascriptInterface(jsBridge, ReaderBridgeContract.JS_INTERFACE_NAME)
                 webViewClient = assetLoader.createWebViewClient(
                     onChapterLink = onChapterLink,

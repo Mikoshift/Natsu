@@ -11,9 +11,11 @@ class ReaderWebViewController {
         private set
 
     private val gson = Gson()
+    private var pendingTheme: ReaderSettings? = null
 
     fun attach(webView: WebView) {
         this.webView = webView
+        pendingTheme?.let { applyTheme(it) }
     }
 
     fun detach() {
@@ -31,24 +33,32 @@ class ReaderWebViewController {
         val script = """
             (function() {
               var head = document.head || document.getElementsByTagName('head')[0];
+              function initBridge() {
+                if (!window.NatsuReader) return;
+                if (window.NatsuReader.init) {
+                  window.NatsuReader.init();
+                }
+              }
+              function loadBridge() {
+                if (window.NatsuReader) {
+                  initBridge();
+                  return;
+                }
+                var script = document.createElement('script');
+                script.src = '$bridgeUrl';
+                script.onload = initBridge;
+                head.appendChild(script);
+              }
               if (!document.querySelector('link[data-natsu-theme]')) {
                 var link = document.createElement('link');
                 link.rel = 'stylesheet';
                 link.href = '$themeUrl';
                 link.setAttribute('data-natsu-theme', 'true');
+                link.onload = loadBridge;
+                link.onerror = loadBridge;
                 head.appendChild(link);
-              }
-              if (!window.NatsuReader) {
-                var script = document.createElement('script');
-                script.src = '$bridgeUrl';
-                script.onload = function() {
-                  if (window.NatsuReader && window.NatsuReader.init) {
-                    window.NatsuReader.init();
-                  }
-                };
-                head.appendChild(script);
-              } else if (window.NatsuReader.init) {
-                window.NatsuReader.init();
+              } else {
+                loadBridge();
               }
             })();
         """.trimIndent()
@@ -58,6 +68,7 @@ class ReaderWebViewController {
     }
 
     fun applyTheme(settings: ReaderSettings) {
+        pendingTheme = settings
         val colors = themeColors(settings.theme)
         val payload = mapOf(
             "fontSizePx" to settings.fontSizeSp * 1.333f,
@@ -65,7 +76,15 @@ class ReaderWebViewController {
             "backgroundColor" to colors.first,
             "textColor" to colors.second,
         )
-        evaluate("window.$READER_JS_GLOBAL.applyTheme(${gson.toJson(payload)})")
+        val script = """
+            (function() {
+              if (!window.NatsuReader || !window.NatsuReader.applyTheme) return false;
+              window.NatsuReader.applyTheme(${gson.toJson(payload)});
+              return true;
+            })();
+        """.trimIndent()
+        webView?.setBackgroundColor(android.graphics.Color.parseColor(colors.first))
+        evaluateWithRetry(script, attempt = 0)
     }
 
     fun highlightSearch(ranges: List<IntRange>) {
@@ -81,6 +100,16 @@ class ReaderWebViewController {
 
     fun scrollToOffset(charOffset: Int) {
         evaluate("window.$READER_JS_GLOBAL.scrollToOffset($charOffset)")
+    }
+
+    private fun evaluateWithRetry(script: String, attempt: Int) {
+        val view = webView ?: return
+        view.evaluateJavascript(script) { result ->
+            if (result == "true") return@evaluateJavascript
+            if (attempt < 15) {
+                view.postDelayed({ evaluateWithRetry(script, attempt + 1) }, 100L)
+            }
+        }
     }
 
     private fun evaluate(script: String) {

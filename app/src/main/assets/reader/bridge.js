@@ -24,42 +24,39 @@
     }
   }
 
-  function expandToWord(range) {
-    if (!range || range.collapsed === false) {
-      var text = range.toString();
-      if (text.trim().length > 0) {
-        return { text: text, start: range.startOffset, end: range.endOffset };
+  function findParagraphElement(node) {
+    var current = node;
+    while (current && current !== document.body) {
+      if (
+        current.nodeType === Node.ELEMENT_NODE &&
+        /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i.test(current.tagName)
+      ) {
+        return current;
       }
+      current = current.parentNode;
     }
-    if (!range) {
-      return null;
-    }
-    var node = range.startContainer;
-    if (node.nodeType !== Node.TEXT_NODE) {
-      return null;
-    }
-    var textContent = node.textContent || "";
-    var index = range.startOffset;
-    if (index < 0 || index > textContent.length) {
-      return null;
-    }
-
-    var start = index;
-    var end = index;
-    while (start > 0 && !/\s/.test(textContent.charAt(start - 1))) {
-      start -= 1;
-    }
-    while (end < textContent.length && !/\s/.test(textContent.charAt(end))) {
-      end += 1;
-    }
-    var word = textContent.slice(start, end).trim();
-    if (!word) {
-      return null;
-    }
-    return { text: word, start: start, end: end };
+    return document.body;
   }
 
-  function getWordAtPoint(clientX, clientY) {
+  function charOffsetInParagraph(paragraph, textNode, nodeOffset) {
+    var walker = document.createTreeWalker(
+      paragraph,
+      NodeFilter.SHOW_TEXT,
+      null,
+    );
+    var offset = 0;
+    var node = walker.nextNode();
+    while (node) {
+      if (node === textNode) {
+        return offset + nodeOffset;
+      }
+      offset += (node.textContent || "").length;
+      node = walker.nextNode();
+    }
+    return offset;
+  }
+
+  function getTapContext(clientX, clientY) {
     var doc = document;
     var range = null;
     if (doc.caretRangeFromPoint) {
@@ -72,7 +69,22 @@
         range.collapse(true);
       }
     }
-    return expandToWord(range);
+    if (!range || range.startContainer.nodeType !== Node.TEXT_NODE) {
+      return null;
+    }
+    var paragraph = findParagraphElement(range.startContainer);
+    var text = paragraph.innerText || paragraph.textContent || "";
+    if (!text.trim()) {
+      return null;
+    }
+    return {
+      text: text,
+      charOffset: charOffsetInParagraph(
+        paragraph,
+        range.startContainer,
+        range.startOffset,
+      ),
+    };
   }
 
   function clearHighlights() {
@@ -142,13 +154,13 @@
       document.addEventListener(
         "click",
         function (event) {
-          var result = getWordAtPoint(event.clientX, event.clientY);
+          var result = getTapContext(event.clientX, event.clientY);
           if (!result) {
             return;
           }
           var target = bridge();
           if (target && target.onWordTap) {
-            target.onWordTap(result.text, result.start, result.end);
+            target.onWordTap(result.text, result.charOffset);
           }
         },
         true,
@@ -163,10 +175,11 @@
     },
 
     applyTheme: function (vars) {
-      var root = document.documentElement;
       if (!vars) {
         return;
       }
+      var root = document.documentElement;
+      var body = document.body;
       if (vars.fontSizePx != null) {
         root.style.setProperty("--natsu-font-size", vars.fontSizePx + "px");
       }
@@ -175,11 +188,20 @@
       }
       if (vars.backgroundColor != null) {
         root.style.setProperty("--natsu-bg", vars.backgroundColor);
+        root.style.backgroundColor = vars.backgroundColor;
+        if (body) {
+          body.style.backgroundColor = vars.backgroundColor;
+        }
       }
       if (vars.textColor != null) {
         root.style.setProperty("--natsu-text", vars.textColor);
+        if (body) {
+          body.style.color = vars.textColor;
+        }
       }
-      document.body.classList.add("natsu-chapter");
+      if (body) {
+        body.classList.add("natsu-chapter");
+      }
     },
 
     highlightSearch: function (ranges) {

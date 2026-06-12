@@ -11,13 +11,25 @@ body {
   padding: 0;
 }
 
+html {
+  background: var(--natsu-bg);
+  color: var(--natsu-text);
+}
+
 body.natsu-chapter {
   background: var(--natsu-bg);
   color: var(--natsu-text);
+  font-family: sans-serif;
   font-size: var(--natsu-font-size);
   line-height: var(--natsu-line-height);
   padding: 12px 16px 32px;
   -webkit-text-size-adjust: 100%;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+body.natsu-chapter p {
+  cursor: pointer;
 }
 
 body.natsu-chapter p,
