@@ -6,6 +6,7 @@ import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import androidx.webkit.WebViewAssetLoader
 import androidx.webkit.WebViewClientCompat
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.io.FileInputStream
 
@@ -25,7 +26,6 @@ class BookWebViewAssetLoader(
 
     fun createWebViewClient(
         onChapterLink: (relativePath: String) -> Unit,
-        onPageFinished: (url: String) -> Unit,
     ): WebViewClientCompat {
         return object : WebViewClientCompat() {
             override fun shouldInterceptRequest(
@@ -44,12 +44,6 @@ class BookWebViewAssetLoader(
                 }
                 return false
             }
-
-            override fun onPageFinished(view: WebView, url: String?) {
-                if (url != null) {
-                    onPageFinished(url)
-                }
-            }
         }
     }
 
@@ -61,6 +55,15 @@ class BookWebViewAssetLoader(
         if (!target.path.startsWith(bookRoot.path)) return null
         if (!target.exists() || !target.isFile) return null
         val mimeType = guessMimeType(target.name)
+        if (ChapterHtmlInjector.isInjectable(target.name)) {
+            val isXhtml = target.name.substringAfterLast('.').equals("xhtml", ignoreCase = true)
+            val injected = ChapterHtmlInjector.inject(target.readText(Charsets.UTF_8), isXhtml)
+            return WebResourceResponse(
+                mimeType,
+                "UTF-8",
+                ByteArrayInputStream(injected.toByteArray(Charsets.UTF_8)),
+            )
+        }
         return WebResourceResponse(
             mimeType,
             null,

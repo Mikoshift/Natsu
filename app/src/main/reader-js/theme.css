@@ -1,0 +1,65 @@
+:root {
+  --natsu-font-size: 16px;
+  --natsu-line-height: 1.8;
+  --natsu-bg: #ffffff;
+  --natsu-text: #1c1b1f;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  max-width: 100%;
+}
+
+html {
+  background: var(--natsu-bg);
+  color: var(--natsu-text);
+}
+
+body.natsu-chapter {
+  background: var(--natsu-bg);
+  color: var(--natsu-text);
+  font-family: sans-serif;
+  font-size: var(--natsu-font-size);
+  line-height: var(--natsu-line-height);
+  padding: 16px calc(20px + env(safe-area-inset-right, 0px)) calc(40px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+  -webkit-text-size-adjust: 100%;
+  word-break: normal;
+  overflow-wrap: anywhere;
+}
+
+body.natsu-chapter p {
+  cursor: pointer;
+}
+
+body.natsu-chapter p,
+body.natsu-chapter li {
+  margin: 0 0 1em;
+}
+
+body.natsu-chapter h1,
+body.natsu-chapter h2,
+body.natsu-chapter h3,
+body.natsu-chapter h4,
+body.natsu-chapter h5,
+body.natsu-chapter h6 {
+  line-height: 1.35;
+  margin: 1.2em 0 0.6em;
+}
+
+body.natsu-chapter img {
+  max-width: 100%;
+  height: auto;
+}
+
+mark.natsu-search-highlight {
+  background: rgba(255, 214, 0, 0.45);
+  color: inherit;
+  padding: 0;
+}
+
+ruby rt {
+  font-size: 0.55em;
+  user-select: none;
+}

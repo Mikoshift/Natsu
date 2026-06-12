@@ -1,0 +1,80 @@
+import { callBridge } from "./native-bridge.js";
+import { getTapContext } from "./text/range-from-point.js";
+
+const SCROLL_THROTTLE_MS = 400;
+const TAP_MOVE_THRESHOLD_PX = 10;
+const TAP_CLICK_SUPPRESS_MS = 400;
+
+let lastScrollNotify = 0;
+let touchStartX = 0;
+let touchStartY = 0;
+let lastTouchTapAt = 0;
+
+function notifyScrollProgress() {
+  const now = Date.now();
+  if (now - lastScrollNotify < SCROLL_THROTTLE_MS) {
+    return;
+  }
+  lastScrollNotify = now;
+  const doc = document.documentElement;
+  const scrollHeight = doc.scrollHeight - doc.clientHeight;
+  const ratio = scrollHeight > 0 ? doc.scrollTop / scrollHeight : 0;
+  callBridge("onScrollProgress", ratio);
+}
+
+function handleWordTap(clientX, clientY) {
+  const result = getTapContext(clientX, clientY);
+  if (!result) {
+    return;
+  }
+  callBridge("onWordTap", result.text, result.charOffset);
+}
+
+export function installEventListeners() {
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      if (event.touches.length !== 1) {
+        return;
+      }
+      touchStartX = event.touches[0].clientX;
+      touchStartY = event.touches[0].clientY;
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "touchend",
+    (event) => {
+      if (event.changedTouches.length !== 1) {
+        return;
+      }
+      const touch = event.changedTouches[0];
+      const dx = touch.clientX - touchStartX;
+      const dy = touch.clientY - touchStartY;
+      if (dx * dx + dy * dy > TAP_MOVE_THRESHOLD_PX * TAP_MOVE_THRESHOLD_PX) {
+        return;
+      }
+      if (!getTapContext(touch.clientX, touch.clientY)) {
+        return;
+      }
+      event.preventDefault();
+      lastTouchTapAt = Date.now();
+      handleWordTap(touch.clientX, touch.clientY);
+    },
+    { capture: true, passive: false },
+  );
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (Date.now() - lastTouchTapAt < TAP_CLICK_SUPPRESS_MS) {
+        return;
+      }
+      handleWordTap(event.clientX, event.clientY);
+    },
+    true,
+  );
+
+  window.addEventListener("scroll", notifyScrollProgress, { passive: true });
+}

@@ -53,6 +53,35 @@ android {
     }
 }
 
+val compileReaderJs = tasks.register<Exec>("compileReaderJs") {
+    group = "build"
+    description = "Bundle reader WebView JavaScript assets"
+    workingDir = file("src/main/reader-js")
+    val isWindows = System.getProperty("os.name").lowercase().contains("windows")
+    commandLine(
+        if (isWindows) {
+            listOf("cmd", "/c", "npm install && npm run build")
+        } else {
+            listOf("sh", "-c", "npm install && npm run build")
+        },
+    )
+    inputs.dir(file("src/main/reader-js/src"))
+    inputs.files(
+        file("src/main/reader-js/package.json"),
+        file("src/main/reader-js/package-lock.json"),
+        file("src/main/reader-js/esbuild.config.mjs"),
+        file("src/main/reader-js/theme.css"),
+    )
+    outputs.files(
+        file("src/main/assets/reader/bridge.js"),
+        file("src/main/assets/reader/theme.css"),
+    )
+}
+
+tasks.named("preBuild").configure {
+    dependsOn(compileReaderJs)
+}
+
 dependencies {
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)

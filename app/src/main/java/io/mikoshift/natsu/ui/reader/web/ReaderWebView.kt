@@ -111,7 +111,6 @@ fun ReaderWebView(
                 addJavascriptInterface(jsBridge, ReaderBridgeContract.JS_INTERFACE_NAME)
                 webViewClient = assetLoader.createWebViewClient(
                     onChapterLink = onChapterLink,
-                    onPageFinished = { controller.injectReaderAssets() },
                 )
                 controller.attach(this)
             }

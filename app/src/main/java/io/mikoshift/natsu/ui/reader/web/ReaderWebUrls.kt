@@ -1,5 +1,6 @@
 package io.mikoshift.natsu.ui.reader.web
 
+import android.net.Uri
 import java.net.URLDecoder
 import java.nio.charset.StandardCharsets
 
@@ -19,6 +20,8 @@ object ReaderWebUrls {
     fun bridgeScriptUrl(): String = readerAssetUrl(ReaderBridgeContract.BRIDGE_ASSET_PATH)
 
     fun themeStylesheetUrl(): String = readerAssetUrl(ReaderBridgeContract.THEME_ASSET_PATH)
+
+    fun webViewOrigin(): Uri = Uri.parse("https://${ReaderBridgeContract.ASSET_HOST}")
 
     fun isBookChapterUrl(url: String, documentId: String): Boolean {
         return url.startsWith("${ReaderBridgeContract.BOOKS_URL_PREFIX}$documentId/")

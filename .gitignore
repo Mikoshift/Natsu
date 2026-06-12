@@ -21,3 +21,4 @@ signing.properties
 app/src/main/assets/dictionary/
 .cursor
 spike-samples/
+app/src/main/reader-js/node_modules/

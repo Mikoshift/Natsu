@@ -1,79 +1,67 @@
-(function () {
-  "use strict";
-
+(() => {
+  // src/native-bridge.js
   var BRIDGE_NAME = "NatsuBridge";
-  var SCROLL_THROTTLE_MS = 400;
-  var TAP_MOVE_THRESHOLD_PX = 10;
-  var lastScrollNotify = 0;
-  var touchStartX = 0;
-  var touchStartY = 0;
-
   function bridge() {
     return window[BRIDGE_NAME];
   }
-
-  function notifyScrollProgress() {
-    var now = Date.now();
-    if (now - lastScrollNotify < SCROLL_THROTTLE_MS) {
-      return;
-    }
-    lastScrollNotify = now;
-    var doc = document.documentElement;
-    var scrollHeight = doc.scrollHeight - doc.clientHeight;
-    var ratio = scrollHeight > 0 ? doc.scrollTop / scrollHeight : 0;
-    var target = bridge();
-    if (target && target.onScrollProgress) {
-      target.onScrollProgress(ratio);
+  function callBridge(method, ...args) {
+    const target = bridge();
+    if (target && typeof target[method] === "function") {
+      target[method](...args);
     }
   }
 
-  function findParagraphElement(node) {
-    var current = node;
-    while (current && current !== document.body) {
-      if (
-        current.nodeType === Node.ELEMENT_NODE &&
-        /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i.test(current.tagName)
-      ) {
-        return current;
+  // src/text/walker.js
+  function collectTextRoot() {
+    return document.body || document.documentElement;
+  }
+  function isInsideTag(node, root, tagName) {
+    let parent = node.parentNode;
+    while (parent && parent !== root) {
+      if (parent.nodeType === Node.ELEMENT_NODE && parent.tagName.toLowerCase() === tagName) {
+        return true;
       }
-      current = current.parentNode;
+      parent = parent.parentNode;
     }
-    return document.body;
+    return false;
+  }
+  function createTextWalker(root, acceptNode) {
+    return document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode });
+  }
+  function createVisibleTextWalker(root) {
+    return createTextWalker(root, (node) => {
+      if (isInsideTag(node, root, "rt")) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    });
+  }
+  function createInjectableTextWalker(root) {
+    return createTextWalker(root, (node) => {
+      if (isInsideTag(node, root, "rt")) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      if (isInsideTag(node, root, "ruby")) {
+        return NodeFilter.FILTER_REJECT;
+      }
+      return NodeFilter.FILTER_ACCEPT;
+    });
   }
 
+  // src/text/offset.js
   function charOffsetInParagraph(paragraph, range) {
-    var pre = document.createRange();
+    const pre = document.createRange();
     pre.selectNodeContents(paragraph);
     pre.setEnd(range.startContainer, range.startOffset);
     return pre.toString().length;
   }
-
-  // Returns the char offset of `range` within `paragraph.innerText`.
-  // innerText normalises whitespace and strips <rt> (furigana) content, so we
-  // walk the visible text nodes the same way innerText does: skip <rt> nodes.
   function innerTextOffsetInParagraph(paragraph, range) {
-    var targetNode = range.startContainer;
-    var targetOffset = range.startOffset;
-    var offset = 0;
-    var found = false;
-    var walker = document.createTreeWalker(
-      paragraph,
-      NodeFilter.SHOW_TEXT,
-      {
-        acceptNode: function (node) {
-          // Skip text inside <rt> tags (furigana readings injected by injectRuby)
-          var parent = node.parentNode;
-          while (parent && parent !== paragraph) {
-            if (parent.tagName && parent.tagName.toLowerCase() === "rt") {
-              return NodeFilter.FILTER_REJECT;
-            }
-            parent = parent.parentNode;
-          }
-          return NodeFilter.FILTER_ACCEPT;
-        },
-      },
-    );
-    var node = walker.nextNode();
+    const targetNode = range.startContainer;
+    const targetOffset = range.startOffset;
+    let offset = 0;
+    let found = false;
+    const walker = createVisibleTextWalker(paragraph);
+    let node = walker.nextNode();
     while (node) {
       if (node === targetNode) {
         offset += targetOffset;
@@ -83,135 +71,20 @@
       offset += (node.textContent || "").length;
       node = walker.nextNode();
     }
-    // If the exact node wasn't found (e.g. target is inside <rt>), fall back to
-    // the textContent-based offset which is still better than nothing.
     if (!found) {
       return charOffsetInParagraph(paragraph, range);
     }
     return offset;
   }
-
-  function findTextNodeInElement(element) {
-    var walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      null,
-    );
-    return walker.nextNode();
-  }
-
-  function rangeFromPoint(clientX, clientY) {
-    var doc = document;
-    var range = null;
-    if (doc.caretRangeFromPoint) {
-      range = doc.caretRangeFromPoint(clientX, clientY);
-    } else if (doc.caretPositionFromPoint) {
-      var position = doc.caretPositionFromPoint(clientX, clientY);
-      if (position) {
-        range = doc.createRange();
-        range.setStart(position.offsetNode, position.offset);
-        range.collapse(true);
-      }
-    }
-    if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
-      return range;
-    }
-    var element = doc.elementFromPoint(clientX, clientY);
-    if (!element) {
-      return null;
-    }
-    var textNode = findTextNodeInElement(element);
-    if (!textNode) {
-      return null;
-    }
-    range = doc.createRange();
-    range.setStart(textNode, 0);
-    range.collapse(true);
-    return range;
-  }
-
-  function getTapContext(clientX, clientY) {
-    var range = rangeFromPoint(clientX, clientY);
-    if (!range) {
-      return null;
-    }
-    var paragraph = findParagraphElement(range.startContainer);
-    // innerText gives the visible text without furigana readings (<rt> content),
-    // which matches what Kotlin tokenizes. Use innerTextOffsetInParagraph so the
-    // charOffset is consistent with that same string.
-    var text = paragraph.innerText || paragraph.textContent || "";
-    if (!text.trim()) {
-      return null;
-    }
-    return {
-      text: text,
-      charOffset: innerTextOffsetInParagraph(paragraph, range),
-    };
-  }
-
-  function handleWordTap(clientX, clientY) {
-    var result = getTapContext(clientX, clientY);
-    if (!result) {
-      return;
-    }
-    var target = bridge();
-    if (target && target.onWordTap) {
-      target.onWordTap(result.text, result.charOffset);
-    }
-  }
-
-  function clearHighlights() {
-    document.querySelectorAll("mark.natsu-search-highlight").forEach(function (mark) {
-      var parent = mark.parentNode;
-      if (!parent) {
-        return;
-      }
-      while (mark.firstChild) {
-        parent.insertBefore(mark.firstChild, mark);
-      }
-      parent.removeChild(mark);
-      parent.normalize();
-    });
-  }
-
-  function highlightRange(root, start, end) {
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    var current = 0;
-    var node = walker.nextNode();
-    while (node) {
-      var length = node.textContent.length;
-      var nodeStart = current;
-      var nodeEnd = current + length;
-      if (end > nodeStart && start < nodeEnd) {
-        var localStart = Math.max(0, start - nodeStart);
-        var localEnd = Math.min(length, end - nodeStart);
-        var range = document.createRange();
-        range.setStart(node, localStart);
-        range.setEnd(node, localEnd);
-        var mark = document.createElement("mark");
-        mark.className = "natsu-search-highlight";
-        range.surroundContents(mark);
-        return mark;
-      }
-      current = nodeEnd;
-      node = walker.nextNode();
-    }
-    return null;
-  }
-
-  function collectTextRoot() {
-    return document.body || document.documentElement;
-  }
-
   function charOffsetToPoint(root, targetOffset) {
-    var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-    var current = 0;
-    var node = walker.nextNode();
+    let current = 0;
+    const walker = createVisibleTextWalker(root);
+    let node = walker.nextNode();
     while (node) {
-      var length = node.textContent.length;
+      const length = (node.textContent || "").length;
       if (current + length >= targetOffset) {
-        var range = document.createRange();
-        var localOffset = Math.max(0, targetOffset - current);
+        const range = document.createRange();
+        const localOffset = Math.max(0, targetOffset - current);
         range.setStart(node, Math.min(localOffset, length));
         range.collapse(true);
         return range;
@@ -222,166 +95,352 @@
     return null;
   }
 
-  window.NatsuReader = {
-    init: function () {
-      if (window.__natsuReaderInitialized) {
+  // src/text/range-from-point.js
+  function findTextNodeInElement(element) {
+    const walker = document.createTreeWalker(
+      element,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    return walker.nextNode();
+  }
+  function findParagraphElement(node) {
+    let current = node;
+    while (current && current !== document.body) {
+      if (current.nodeType === Node.ELEMENT_NODE && /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i.test(current.tagName)) {
+        return current;
+      }
+      current = current.parentNode;
+    }
+    return document.body;
+  }
+  function rangeFromPoint(clientX, clientY) {
+    const doc = document;
+    let range = null;
+    if (doc.caretRangeFromPoint) {
+      range = doc.caretRangeFromPoint(clientX, clientY);
+    } else if (doc.caretPositionFromPoint) {
+      const position = doc.caretPositionFromPoint(clientX, clientY);
+      if (position) {
+        range = doc.createRange();
+        range.setStart(position.offsetNode, position.offset);
+        range.collapse(true);
+      }
+    }
+    if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+      return range;
+    }
+    const element = doc.elementFromPoint(clientX, clientY);
+    if (!element) {
+      return null;
+    }
+    const textNode = findTextNodeInElement(element);
+    if (!textNode) {
+      return null;
+    }
+    range = doc.createRange();
+    range.setStart(textNode, 0);
+    range.collapse(true);
+    return range;
+  }
+  function getTapContext(clientX, clientY) {
+    const range = rangeFromPoint(clientX, clientY);
+    if (!range) {
+      return null;
+    }
+    const paragraph = findParagraphElement(range.startContainer);
+    const text = paragraph.innerText || paragraph.textContent || "";
+    if (!text.trim()) {
+      return null;
+    }
+    return {
+      text,
+      charOffset: innerTextOffsetInParagraph(paragraph, range)
+    };
+  }
+
+  // src/events.js
+  var SCROLL_THROTTLE_MS = 400;
+  var TAP_MOVE_THRESHOLD_PX = 10;
+  var TAP_CLICK_SUPPRESS_MS = 400;
+  var lastScrollNotify = 0;
+  var touchStartX = 0;
+  var touchStartY = 0;
+  var lastTouchTapAt = 0;
+  function notifyScrollProgress() {
+    const now = Date.now();
+    if (now - lastScrollNotify < SCROLL_THROTTLE_MS) {
+      return;
+    }
+    lastScrollNotify = now;
+    const doc = document.documentElement;
+    const scrollHeight = doc.scrollHeight - doc.clientHeight;
+    const ratio = scrollHeight > 0 ? doc.scrollTop / scrollHeight : 0;
+    callBridge("onScrollProgress", ratio);
+  }
+  function handleWordTap(clientX, clientY) {
+    const result = getTapContext(clientX, clientY);
+    if (!result) {
+      return;
+    }
+    callBridge("onWordTap", result.text, result.charOffset);
+  }
+  function installEventListeners() {
+    document.addEventListener(
+      "touchstart",
+      (event) => {
+        if (event.touches.length !== 1) {
+          return;
+        }
+        touchStartX = event.touches[0].clientX;
+        touchStartY = event.touches[0].clientY;
+      },
+      true
+    );
+    document.addEventListener(
+      "touchend",
+      (event) => {
+        if (event.changedTouches.length !== 1) {
+          return;
+        }
+        const touch = event.changedTouches[0];
+        const dx = touch.clientX - touchStartX;
+        const dy = touch.clientY - touchStartY;
+        if (dx * dx + dy * dy > TAP_MOVE_THRESHOLD_PX * TAP_MOVE_THRESHOLD_PX) {
+          return;
+        }
+        if (!getTapContext(touch.clientX, touch.clientY)) {
+          return;
+        }
+        event.preventDefault();
+        lastTouchTapAt = Date.now();
+        handleWordTap(touch.clientX, touch.clientY);
+      },
+      { capture: true, passive: false }
+    );
+    document.addEventListener(
+      "click",
+      (event) => {
+        if (Date.now() - lastTouchTapAt < TAP_CLICK_SUPPRESS_MS) {
+          return;
+        }
+        handleWordTap(event.clientX, event.clientY);
+      },
+      true
+    );
+    window.addEventListener("scroll", notifyScrollProgress, { passive: true });
+  }
+
+  // src/features/highlight.js
+  function clearHighlights() {
+    document.querySelectorAll("mark.natsu-search-highlight").forEach((mark) => {
+      const parent = mark.parentNode;
+      if (!parent) {
         return;
       }
-      window.__natsuReaderInitialized = true;
-
-      document.addEventListener(
-        "touchstart",
-        function (event) {
-          if (event.touches.length !== 1) {
-            return;
-          }
-          touchStartX = event.touches[0].clientX;
-          touchStartY = event.touches[0].clientY;
-        },
-        true,
-      );
-
-      document.addEventListener(
-        "touchend",
-        function (event) {
-          if (event.changedTouches.length !== 1) {
-            return;
-          }
-          var touch = event.changedTouches[0];
-          var dx = touch.clientX - touchStartX;
-          var dy = touch.clientY - touchStartY;
-          if (dx * dx + dy * dy > TAP_MOVE_THRESHOLD_PX * TAP_MOVE_THRESHOLD_PX) {
-            return;
-          }
-          var result = getTapContext(touch.clientX, touch.clientY);
-          if (!result) {
-            return;
-          }
-          event.preventDefault();
-          handleWordTap(touch.clientX, touch.clientY);
-        },
-        { capture: true, passive: false },
-      );
-
-      document.addEventListener(
-        "click",
-        function (event) {
-          handleWordTap(event.clientX, event.clientY);
-        },
-        true,
-      );
-
-      window.addEventListener("scroll", notifyScrollProgress, { passive: true });
-
-      var target = bridge();
-      if (target && target.onBridgeReady) {
-        target.onBridgeReady();
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
       }
-      if (target && target.onChapterReady) {
-        target.onChapterReady();
+      parent.removeChild(mark);
+      parent.normalize();
+    });
+  }
+  function highlightRange(root, start, end) {
+    const segments = [];
+    let current = 0;
+    const walker = createVisibleTextWalker(root);
+    let node = walker.nextNode();
+    while (node) {
+      const length = (node.textContent || "").length;
+      const nodeStart = current;
+      const nodeEnd = current + length;
+      if (end > nodeStart && start < nodeEnd) {
+        segments.push({
+          node,
+          localStart: Math.max(0, start - nodeStart),
+          localEnd: Math.min(length, end - nodeStart)
+        });
       }
-    },
-
-    applyTheme: function (vars) {
-      if (!vars) {
+      current = nodeEnd;
+      node = walker.nextNode();
+    }
+    for (let i = segments.length - 1; i >= 0; i--) {
+      const seg = segments[i];
+      const localLength = seg.localEnd - seg.localStart;
+      if (localLength <= 0) {
+        continue;
+      }
+      let textNode = seg.node;
+      if (seg.localEnd < textNode.length) {
+        textNode.splitText(seg.localEnd);
+      }
+      let highlightNode = textNode;
+      if (seg.localStart > 0) {
+        highlightNode = textNode.splitText(seg.localStart);
+      }
+      const mark = document.createElement("mark");
+      mark.className = "natsu-search-highlight";
+      highlightNode.parentNode.replaceChild(mark, highlightNode);
+      mark.appendChild(highlightNode);
+    }
+  }
+  function highlightSearch(ranges) {
+    clearHighlights();
+    if (!ranges || !ranges.length) {
+      return;
+    }
+    const root = collectTextRoot();
+    ranges.forEach((range) => {
+      if (range == null || range.start == null || range.end == null) {
         return;
       }
-      var root = document.documentElement;
-      var body = document.body;
-      if (vars.fontSizePx != null) {
-        root.style.setProperty("--natsu-font-size", vars.fontSizePx + "px");
+      highlightRange(root, range.start, range.end);
+    });
+  }
+
+  // src/features/ruby.js
+  function injectRuby(tokens) {
+    if (!tokens || !tokens.length) {
+      return;
+    }
+    const root = collectTextRoot();
+    tokens.forEach((token) => {
+      if (!token || !token.surface || !token.reading) {
+        return;
       }
-      if (vars.lineHeight != null) {
-        root.style.setProperty("--natsu-line-height", String(vars.lineHeight));
+      const walker = createInjectableTextWalker(root);
+      let node = walker.nextNode();
+      while (node) {
+        const parent = node.parentNode;
+        if (!parent) {
+          node = walker.nextNode();
+          continue;
+        }
+        const text = node.textContent || "";
+        const index = text.indexOf(token.surface);
+        if (index < 0) {
+          node = walker.nextNode();
+          continue;
+        }
+        const before = text.slice(0, index);
+        const after = text.slice(index + token.surface.length);
+        const ruby = document.createElement("ruby");
+        ruby.setAttribute("data-natsu-surface", token.surface);
+        const rb = document.createElement("rb");
+        rb.textContent = token.surface;
+        const rt = document.createElement("rt");
+        rt.textContent = token.reading;
+        ruby.appendChild(rb);
+        ruby.appendChild(rt);
+        const fragment = document.createDocumentFragment();
+        if (before) {
+          fragment.appendChild(document.createTextNode(before));
+        }
+        fragment.appendChild(ruby);
+        if (after) {
+          fragment.appendChild(document.createTextNode(after));
+        }
+        parent.replaceChild(fragment, node);
+        break;
       }
-      if (vars.backgroundColor != null) {
-        root.style.setProperty("--natsu-bg", vars.backgroundColor);
-        root.style.backgroundColor = vars.backgroundColor;
-        if (body) {
-          body.style.backgroundColor = vars.backgroundColor;
+    });
+  }
+
+  // src/features/scroll.js
+  function scrollToOffset(charOffset) {
+    const root = collectTextRoot();
+    const range = charOffsetToPoint(root, charOffset);
+    if (!range) {
+      return;
+    }
+    const rect = range.getBoundingClientRect();
+    const targetTop = window.scrollY + rect.top - window.innerHeight * 0.3;
+    window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
+  }
+
+  // src/messages.js
+  var WEB_MESSAGE_TYPE = "natsu-reader-call";
+  function installMessageListener(api) {
+    window.addEventListener("message", (event) => {
+      let payload = event.data;
+      if (typeof payload === "string") {
+        try {
+          payload = JSON.parse(payload);
+        } catch (e) {
+          return;
         }
       }
-      if (vars.textColor != null) {
-        root.style.setProperty("--natsu-text", vars.textColor);
-        if (body) {
-          body.style.color = vars.textColor;
-        }
+      if (!payload || payload.type !== WEB_MESSAGE_TYPE) {
+        return;
       }
+      const fn = api[payload.method];
+      if (typeof fn !== "function") {
+        return;
+      }
+      fn.apply(api, payload.args || []);
+    });
+  }
+  function scheduleReaderInit(init) {
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", init);
+    } else {
+      init();
+    }
+  }
+
+  // src/theme.js
+  function applyTheme(vars) {
+    if (!vars) {
+      return;
+    }
+    const root = document.documentElement;
+    const body = document.body;
+    if (vars.fontSizePx != null) {
+      root.style.setProperty("--natsu-font-size", vars.fontSizePx + "px");
+    }
+    if (vars.lineHeight != null) {
+      root.style.setProperty("--natsu-line-height", String(vars.lineHeight));
+    }
+    if (vars.backgroundColor != null) {
+      root.style.setProperty("--natsu-bg", vars.backgroundColor);
+      root.style.backgroundColor = vars.backgroundColor;
       if (body) {
-        body.classList.add("natsu-chapter");
+        body.style.backgroundColor = vars.backgroundColor;
       }
-    },
+    }
+    if (vars.textColor != null) {
+      root.style.setProperty("--natsu-text", vars.textColor);
+      if (body) {
+        body.style.color = vars.textColor;
+      }
+    }
+    if (body) {
+      body.classList.add("natsu-chapter");
+    }
+  }
 
-    highlightSearch: function (ranges) {
-      clearHighlights();
-      if (!ranges || !ranges.length) {
-        return;
-      }
-      var root = collectTextRoot();
-      ranges.forEach(function (range) {
-        if (range == null || range.start == null || range.end == null) {
+  // src/index.js
+  (function() {
+    "use strict";
+    const reader = {
+      init() {
+        if (window.__natsuReaderInitialized) {
           return;
         }
-        highlightRange(root, range.start, range.end);
-      });
-    },
-
-    injectRuby: function (tokens) {
-      if (!tokens || !tokens.length) {
-        return;
-      }
-      var root = collectTextRoot();
-      tokens.forEach(function (token) {
-        if (!token || !token.surface || !token.reading) {
-          return;
-        }
-        var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
-        var node = walker.nextNode();
-        while (node) {
-          var parent = node.parentNode;
-          if (!parent || (parent.closest && parent.closest("ruby"))) {
-            node = walker.nextNode();
-            continue;
-          }
-          var text = node.textContent || "";
-          var index = text.indexOf(token.surface);
-          if (index < 0) {
-            node = walker.nextNode();
-            continue;
-          }
-          var before = text.slice(0, index);
-          var after = text.slice(index + token.surface.length);
-          var ruby = document.createElement("ruby");
-          ruby.setAttribute("data-natsu-surface", token.surface);
-          var rb = document.createElement("rb");
-          rb.textContent = token.surface;
-          var rt = document.createElement("rt");
-          rt.textContent = token.reading;
-          ruby.appendChild(rb);
-          ruby.appendChild(rt);
-          var fragment = document.createDocumentFragment();
-          if (before) {
-            fragment.appendChild(document.createTextNode(before));
-          }
-          fragment.appendChild(ruby);
-          if (after) {
-            fragment.appendChild(document.createTextNode(after));
-          }
-          parent.replaceChild(fragment, node);
-          break;
-        }
-      });
-    },
-
-    scrollToOffset: function (charOffset) {
-      var root = collectTextRoot();
-      var range = charOffsetToPoint(root, charOffset);
-      if (!range) {
-        return;
-      }
-      var rect = range.getBoundingClientRect();
-      var targetTop = window.scrollY + rect.top - window.innerHeight * 0.3;
-      window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
-    },
-  };
+        window.__natsuReaderInitialized = true;
+        installEventListeners();
+        callBridge("onBridgeReady");
+        requestAnimationFrame(() => {
+          callBridge("onChapterReady");
+        });
+      },
+      applyTheme,
+      highlightSearch,
+      injectRuby,
+      scrollToOffset
+    };
+    window.NatsuReader = reader;
+    installMessageListener(reader);
+    scheduleReaderInit(() => reader.init());
+  })();
 })();

@@ -65,10 +65,6 @@ class ReaderWebViewInstrumentedTest {
                     addJavascriptInterface(jsBridge, ReaderBridgeContract.JS_INTERFACE_NAME)
                     webViewClient = assetLoader.createWebViewClient(
                         onChapterLink = {},
-                        onPageFinished = { url ->
-                            if (url == "about:blank") return@createWebViewClient
-                            controller.injectReaderAssets()
-                        },
                     )
                     webChromeClient = object : WebChromeClient() {
                         override fun onProgressChanged(view: WebView?, newProgress: Int) {
@@ -161,10 +157,6 @@ class ReaderWebViewInstrumentedTest {
                     addJavascriptInterface(jsBridge, ReaderBridgeContract.JS_INTERFACE_NAME)
                     webViewClient = assetLoader.createWebViewClient(
                         onChapterLink = {},
-                        onPageFinished = { url ->
-                            if (url == "about:blank") return@createWebViewClient
-                            controller.injectReaderAssets()
-                        },
                     )
                 }
                 controller.attach(webView)
