@@ -7,7 +7,9 @@ import android.webkit.WebView
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -40,6 +42,9 @@ fun ReaderWebView(
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
+    val currentOnWordTap by rememberUpdatedState(onWordTap)
+    val currentOnScrollProgress by rememberUpdatedState(onScrollProgress)
+    val currentOnChapterReady by rememberUpdatedState(onChapterReady)
     val assetLoader = remember(bookDir, documentId) {
         BookWebViewAssetLoader(
             context = context.applicationContext,
@@ -47,12 +52,12 @@ fun ReaderWebView(
             documentId = documentId,
         )
     }
-    val jsBridge = remember(onWordTap, onScrollProgress, onChapterReady, controller) {
+    val jsBridge = remember(controller) {
         ReaderJsBridge(
-            onWordTap = onWordTap,
-            onScrollProgress = onScrollProgress,
+            onWordTap = { text, charOffset -> currentOnWordTap(text, charOffset) },
+            onScrollProgress = { ratio -> currentOnScrollProgress(ratio) },
             onBridgeReady = { controller.onBridgeReady() },
-            onChapterReady = onChapterReady,
+            onChapterReady = { currentOnChapterReady() },
         )
     }
     val lifecycleOwner = LocalLifecycleOwner.current

@@ -23,4 +23,27 @@ class ReaderWebUrlsTest {
         val url = ReaderWebUrls.chapterUrl("book-1", "content.html")
         assertEquals("content.html", ReaderWebUrls.relativePathFromChapterUrl(url, "book-1"))
     }
+
+    @Test
+    fun readerAssetUrls_useSingleReaderPrefix() {
+        assertEquals(
+            "https://appassets.androidplatform.net/reader/theme.css",
+            ReaderWebUrls.themeStylesheetUrl(),
+        )
+        assertEquals(
+            "https://appassets.androidplatform.net/reader/bridge.js",
+            ReaderWebUrls.bridgeScriptUrl(),
+        )
+    }
+
+    @Test
+    fun readerAssetUrls_mapToAssetsFolderPaths() {
+        fun assetPathFromUrl(url: String): String {
+            val handlerPath = url.removePrefix(ReaderBridgeContract.READER_ASSETS_URL_PREFIX)
+            return "reader/${handlerPath.trimStart('/')}"
+        }
+
+        assertEquals("reader/theme.css", assetPathFromUrl(ReaderWebUrls.themeStylesheetUrl()))
+        assertEquals("reader/bridge.js", assetPathFromUrl(ReaderWebUrls.bridgeScriptUrl()))
+    }
 }

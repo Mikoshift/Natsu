@@ -48,6 +48,49 @@
     return pre.toString().length;
   }
 
+  // Returns the char offset of `range` within `paragraph.innerText`.
+  // innerText normalises whitespace and strips <rt> (furigana) content, so we
+  // walk the visible text nodes the same way innerText does: skip <rt> nodes.
+  function innerTextOffsetInParagraph(paragraph, range) {
+    var targetNode = range.startContainer;
+    var targetOffset = range.startOffset;
+    var offset = 0;
+    var found = false;
+    var walker = document.createTreeWalker(
+      paragraph,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode: function (node) {
+          // Skip text inside <rt> tags (furigana readings injected by injectRuby)
+          var parent = node.parentNode;
+          while (parent && parent !== paragraph) {
+            if (parent.tagName && parent.tagName.toLowerCase() === "rt") {
+              return NodeFilter.FILTER_REJECT;
+            }
+            parent = parent.parentNode;
+          }
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      },
+    );
+    var node = walker.nextNode();
+    while (node) {
+      if (node === targetNode) {
+        offset += targetOffset;
+        found = true;
+        break;
+      }
+      offset += (node.textContent || "").length;
+      node = walker.nextNode();
+    }
+    // If the exact node wasn't found (e.g. target is inside <rt>), fall back to
+    // the textContent-based offset which is still better than nothing.
+    if (!found) {
+      return charOffsetInParagraph(paragraph, range);
+    }
+    return offset;
+  }
+
   function findTextNodeInElement(element) {
     var walker = document.createTreeWalker(
       element,
@@ -93,13 +136,16 @@
       return null;
     }
     var paragraph = findParagraphElement(range.startContainer);
+    // innerText gives the visible text without furigana readings (<rt> content),
+    // which matches what Kotlin tokenizes. Use innerTextOffsetInParagraph so the
+    // charOffset is consistent with that same string.
     var text = paragraph.innerText || paragraph.textContent || "";
     if (!text.trim()) {
       return null;
     }
     return {
       text: text,
-      charOffset: charOffsetInParagraph(paragraph, range),
+      charOffset: innerTextOffsetInParagraph(paragraph, range),
     };
   }
 

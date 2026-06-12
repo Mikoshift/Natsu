@@ -24,6 +24,6 @@ object ReaderBridgeContract {
     const val ASSET_HOST = "appassets.androidplatform.net"
     const val BOOKS_URL_PREFIX = "https://$ASSET_HOST/books/"
     const val READER_ASSETS_URL_PREFIX = "https://$ASSET_HOST/reader/"
-    const val BRIDGE_ASSET_PATH = "reader/bridge.js"
-    const val THEME_ASSET_PATH = "reader/theme.css"
+    const val BRIDGE_ASSET_PATH = "bridge.js"
+    const val THEME_ASSET_PATH = "theme.css"
 }
