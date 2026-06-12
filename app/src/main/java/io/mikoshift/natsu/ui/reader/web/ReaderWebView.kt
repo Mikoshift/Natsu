@@ -21,6 +21,7 @@ import androidx.webkit.WebViewFeature
 import io.mikoshift.natsu.domain.model.FuriganaMode
 import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.ui.reader.FuriganaInjectToken
+import io.mikoshift.natsu.ui.reader.TapHighlightRequest
 import java.io.File
 
 @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
@@ -34,8 +35,11 @@ fun ReaderWebView(
     scrollRequestId: Long,
     searchHighlightRanges: List<IntRange>,
     furiganaTokens: List<FuriganaInjectToken>,
+    layoutParagraphs: List<String>,
+    tapHighlightRequest: TapHighlightRequest?,
+    tapHighlightRequestId: Long,
     controller: ReaderWebViewController,
-    onWordTap: (paragraphText: String, charOffset: Int) -> Unit,
+    onWordTap: (paragraphIndex: Int, charOffset: Int, paragraphText: String) -> Unit,
     onScrollProgress: (ratio: Float) -> Unit,
     onChapterReady: () -> Unit,
     onChapterLink: (relativePath: String) -> Unit,
@@ -54,7 +58,9 @@ fun ReaderWebView(
     }
     val jsBridge = remember(controller) {
         ReaderJsBridge(
-            onWordTap = { text, charOffset -> currentOnWordTap(text, charOffset) },
+            onWordTap = { paragraphIndex, charOffset, paragraphText ->
+                currentOnWordTap(paragraphIndex, charOffset, paragraphText)
+            },
             onScrollProgress = { ratio -> currentOnScrollProgress(ratio) },
             onBridgeReady = { controller.onBridgeReady() },
             onChapterReady = { currentOnChapterReady() },
@@ -109,6 +115,7 @@ fun ReaderWebView(
                     WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF)
                 }
                 addJavascriptInterface(jsBridge, ReaderBridgeContract.JS_INTERFACE_NAME)
+                setOnLongClickListener { true }
                 webViewClient = assetLoader.createWebViewClient(
                     onChapterLink = onChapterLink,
                 )
@@ -138,6 +145,17 @@ fun ReaderWebView(
     LaunchedEffect(searchHighlightRanges, chapterUrl) {
         if (chapterUrl == null) return@LaunchedEffect
         controller.highlightSearch(searchHighlightRanges)
+    }
+
+    LaunchedEffect(layoutParagraphs, chapterUrl) {
+        if (chapterUrl == null) return@LaunchedEffect
+        controller.tagParagraphs(layoutParagraphs)
+    }
+
+    LaunchedEffect(tapHighlightRequestId, chapterUrl) {
+        val request = tapHighlightRequest ?: return@LaunchedEffect
+        if (chapterUrl == null) return@LaunchedEffect
+        controller.highlightTapToken(request.paragraphIndex, request.start, request.end)
     }
 
     LaunchedEffect(furiganaTokens, readerSettings.furiganaMode, chapterUrl) {

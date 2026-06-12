@@ -4,7 +4,7 @@ package io.mikoshift.natsu.ui.reader.web
  * Contract between reader JS ([bridge.js]) and Kotlin ([ReaderJsBridge], [ReaderWebViewController]).
  *
  * ## JS -> Kotlin ([ReaderJsBridge])
- * - [ReaderJsBridge.onWordTap] — paragraph `innerText` + char offset (position in that string); Kotlin tokenizes and opens dictionary.
+ * - [ReaderJsBridge.onWordTap] — paragraph index, char offset, layout text fallback; Kotlin resolves Kuromoji token from cache.
  * - [ReaderJsBridge.onScrollProgress] — chapter scroll ratio in `[0, 1]` for progress save.
  * - [ReaderJsBridge.onBridgeReady] — bridge.js loaded and `init()` ran; Kotlin may apply pending theme.
  * - [ReaderJsBridge.onChapterReady] — chapter DOM ready; Kotlin applies theme, furigana, scroll.
@@ -15,8 +15,9 @@ package io.mikoshift.natsu.ui.reader.web
  *
  * - `NatsuReader.init()` — install listeners; runs after bridge.js loads.
  * - `NatsuReader.applyTheme(vars)` — CSS variables: fontSizePx, lineHeight, backgroundColor, textColor.
+ * - `NatsuReader.tagParagraphs(texts)` — tag DOM blocks with `data-natsu-paragraph-index`.
  * - `NatsuReader.highlightSearch(ranges)` — `[{start, end}]` section-local char offsets.
- * - `NatsuReader.injectRuby(tokens)` — `[{surface, reading}]` for Kuromoji furigana.
+ * - `NatsuReader.injectRuby(tokens)` — `[{surface, reading, start, end}]` section-local layout offsets.
  * - `NatsuReader.scrollToOffset(charOffset)` — scroll to section-local char offset.
  *
  * Kuromoji tokenization stays in Kotlin. JS only handles DOM extraction and decoration.

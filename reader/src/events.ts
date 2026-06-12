@@ -1,5 +1,5 @@
 import { callBridge } from "./native-bridge.js";
-import { getTapContext } from "./text/range-from-point.js";
+import { canTapAtPoint, getTapContext } from "./text/range-from-point.js";
 
 const SCROLL_THROTTLE_MS = 400;
 const TAP_MOVE_THRESHOLD_PX = 10;
@@ -22,15 +22,39 @@ function notifyScrollProgress(): void {
   callBridge("onScrollProgress", ratio);
 }
 
+function clearNativeSelection(): void {
+  const selection = window.getSelection();
+  if (selection && selection.rangeCount > 0) {
+    selection.removeAllRanges();
+  }
+}
+
 function handleWordTap(clientX: number, clientY: number): void {
   const result = getTapContext(clientX, clientY);
+  clearNativeSelection();
   if (!result) {
     return;
   }
-  callBridge("onWordTap", result.text, result.charOffset);
+  callBridge("onWordTap", result.paragraphIndex, result.charOffset, result.text);
 }
 
 export function installEventListeners(): void {
+  document.addEventListener(
+    "selectstart",
+    (event) => {
+      event.preventDefault();
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "contextmenu",
+    (event) => {
+      event.preventDefault();
+    },
+    true,
+  );
+
   document.addEventListener(
     "touchstart",
     (event) => {
@@ -55,7 +79,8 @@ export function installEventListeners(): void {
       if (dx * dx + dy * dy > TAP_MOVE_THRESHOLD_PX * TAP_MOVE_THRESHOLD_PX) {
         return;
       }
-      if (!getTapContext(touch.clientX, touch.clientY)) {
+      clearNativeSelection();
+      if (!canTapAtPoint(touch.clientX, touch.clientY)) {
         return;
       }
       event.preventDefault();
@@ -69,8 +94,10 @@ export function installEventListeners(): void {
     "click",
     (event) => {
       if (Date.now() - lastTouchTapAt < TAP_CLICK_SUPPRESS_MS) {
+        event.preventDefault();
         return;
       }
+      clearNativeSelection();
       handleWordTap(event.clientX, event.clientY);
     },
     true,

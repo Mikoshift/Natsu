@@ -1,18 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { charOffsetToPoint, innerTextOffsetInParagraph } from "./offset.js";
-
-describe("innerTextOffsetInParagraph", () => {
-  it("counts visible text and skips rt readings", () => {
-    document.body.innerHTML = '<p id="p">' + "漢<ruby><rb>字</rb><rt>じ</rt></ruby>テスト" + "</p>";
-    const paragraph = document.getElementById("p")!;
-    const rbNode = paragraph.querySelector("rb")!.firstChild as Text;
-    const range = document.createRange();
-    range.setStart(rbNode, 0);
-    range.collapse(true);
-
-    expect(innerTextOffsetInParagraph(paragraph, range)).toBe(1);
-  });
-});
+import { charOffsetToPoint } from "./offset.js";
+import { extractLayoutText } from "./layout-text.js";
 
 describe("charOffsetToPoint", () => {
   it("maps visible offsets skipping rt text", () => {
@@ -22,11 +10,12 @@ describe("charOffsetToPoint", () => {
 
     const atSecondVisible = charOffsetToPoint(root, 1);
     expect(atSecondVisible).not.toBeNull();
-    expect(atSecondVisible!.startContainer.textContent).toBe("あ");
-    expect(atSecondVisible!.startOffset).toBe(1);
+    expect(atSecondVisible!.startContainer.textContent).toBe("い");
+    expect(atSecondVisible!.startOffset).toBe(0);
 
     const atThirdVisible = charOffsetToPoint(root, 2);
     expect(atThirdVisible).not.toBeNull();
-    expect(atThirdVisible!.startOffset).toBe(1);
+    expect(atThirdVisible!.startOffset).toBe(0);
+    expect(extractLayoutText(root)).toBe("あいう");
   });
 });

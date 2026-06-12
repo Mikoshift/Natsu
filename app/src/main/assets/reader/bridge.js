@@ -29,119 +29,447 @@
     }
     return false;
   }
-  function createTextWalker(root, acceptNode) {
-    return document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode });
+
+  // reader/src/text/dom-text-scanner.ts
+  var SKIP_TAGS = /* @__PURE__ */ new Set(["RT", "RP", "SCRIPT", "STYLE", "HEAD"]);
+  var DOMTextScanner = class {
+    constructor(node, offset, stopAtWordBoundary = false) {
+      this._content = "";
+      const ruby = getParentRubyElement(node);
+      const resetOffset = ruby !== null;
+      if (resetOffset && ruby !== null) {
+        node = ruby;
+      }
+      this._node = node;
+      this._offset = offset;
+      this._remainder = 0;
+      this._resetOffset = resetOffset;
+      this._stopAtWordBoundary = stopAtWordBoundary;
+    }
+    get node() {
+      return this._node;
+    }
+    get offset() {
+      return this._offset;
+    }
+    get remainder() {
+      return this._remainder;
+    }
+    get content() {
+      return this._content;
+    }
+    seek(length) {
+      const forward = length >= 0;
+      this._remainder = forward ? length : -length;
+      if (length === 0) {
+        return this;
+      }
+      let node = this._node;
+      let lastNode = node;
+      let resetOffset = this._resetOffset;
+      while (node !== null && this._remainder > 0) {
+        let enterable = false;
+        if (node.nodeType === Node.TEXT_NODE) {
+          lastNode = node;
+          const keepGoing = forward ? this.seekTextForward(node, resetOffset) : this.seekTextBackward(node, resetOffset);
+          if (!keepGoing) {
+            break;
+          }
+        } else if (node.nodeType === Node.ELEMENT_NODE) {
+          if (this._stopAtWordBoundary && !forward) {
+            break;
+          }
+          lastNode = node;
+          this._offset = 0;
+          ({ enterable } = getElementSeekInfo(node));
+        }
+        const exitedNodes = [];
+        node = getNextNode(node, forward, enterable, exitedNodes);
+        resetOffset = true;
+      }
+      this._node = lastNode;
+      this._resetOffset = resetOffset;
+      return this;
+    }
+    seekTextForward(textNode, resetOffset) {
+      const value = textNode.nodeValue || "";
+      if (resetOffset) {
+        this._offset = 0;
+      }
+      while (this._offset < value.length && this._remainder > 0) {
+        const char = value[this._offset];
+        this._offset += 1;
+        if (isInvisible(char)) {
+          continue;
+        }
+        this._content += char;
+        this._remainder -= 1;
+      }
+      return this._remainder > 0;
+    }
+    seekTextBackward(textNode, resetOffset) {
+      const value = textNode.nodeValue || "";
+      if (resetOffset) {
+        this._offset = value.length;
+      }
+      while (this._offset > 0 && this._remainder > 0) {
+        const char = value[this._offset - 1];
+        if (this._stopAtWordBoundary && isWordDelimiter(char)) {
+          if (!isApostropheInWord(value, this._offset - 1)) {
+            return false;
+          }
+        }
+        this._offset -= 1;
+        if (isInvisible(char)) {
+          continue;
+        }
+        this._content = char + this._content;
+        this._remainder -= 1;
+      }
+      return this._remainder > 0;
+    }
+  };
+  function isWordDelimiter(character) {
+    return /[^\p{L}\p{N}]/u.test(character);
   }
-  function createVisibleTextWalker(root) {
-    return createTextWalker(root, (node) => {
-      if (isInsideTag(node, root, "rt")) {
-        return NodeFilter.FILTER_REJECT;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    });
+  function isWhitespace(text) {
+    return text.trim().length === 0;
   }
-  function createInjectableTextWalker(root) {
-    return createTextWalker(root, (node) => {
-      if (isInsideTag(node, root, "rt")) {
-        return NodeFilter.FILTER_REJECT;
+  function pointInAnyRect(x, y, rects) {
+    for (let i = 0; i < rects.length; i += 1) {
+      const rect = rects[i];
+      if (rect.width <= 0 || rect.height <= 0) {
+        continue;
       }
-      if (isInsideTag(node, root, "ruby")) {
-        return NodeFilter.FILTER_REJECT;
+      if (x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom) {
+        return true;
       }
-      return NodeFilter.FILTER_ACCEPT;
-    });
+    }
+    return false;
+  }
+  function getParentRubyElement(node) {
+    let parent = node.parentNode;
+    if (parent !== null && parent.nodeName.toUpperCase() === "RT") {
+      parent = parent.parentNode;
+      if (parent !== null && parent.nodeName.toUpperCase() === "RUBY") {
+        return parent;
+      }
+    }
+    return null;
+  }
+  function getElementSeekInfo(element) {
+    const tag = element.tagName.toUpperCase();
+    if (SKIP_TAGS.has(tag)) {
+      return { enterable: false, newlines: 0 };
+    }
+    if (tag === "RB") {
+      return { enterable: true, newlines: 0 };
+    }
+    if (tag === "BR") {
+      return { enterable: false, newlines: 1 };
+    }
+    return { enterable: true, newlines: 0 };
+  }
+  function getNextNode(node, forward, visitChildren, exitedNodes) {
+    let next = visitChildren ? forward ? node.firstChild : node.lastChild : null;
+    if (next !== null) {
+      return next;
+    }
+    while (true) {
+      exitedNodes.push(node);
+      next = forward ? node.nextSibling : node.previousSibling;
+      if (next !== null) {
+        return next;
+      }
+      next = node.parentNode;
+      if (next === null) {
+        return null;
+      }
+      node = next;
+    }
+  }
+  function isInvisible(char) {
+    switch (char.charCodeAt(0)) {
+      case 8203:
+      case 8204:
+      case 173:
+        return true;
+      default:
+        return false;
+    }
+  }
+  function isApostropheInWord(text, index) {
+    const char = text[index];
+    if (!isSingleQuote(char) || index <= 0) {
+      return false;
+    }
+    return isWordDelimiter(text[index - 1]);
+  }
+  function isSingleQuote(character) {
+    switch (character.charCodeAt(0)) {
+      case 39:
+      case 8217:
+      case 8242:
+      case 8245:
+      case 700:
+        return true;
+      default:
+        return false;
+    }
   }
 
-  // reader/src/text/offset.ts
-  function charOffsetInParagraph(paragraph, range) {
-    const pre = document.createRange();
-    pre.selectNodeContents(paragraph);
-    pre.setEnd(range.startContainer, range.startOffset);
-    return pre.toString().length;
+  // reader/src/text/layout-text.ts
+  var SKIP_TAGS2 = /* @__PURE__ */ new Set(["RT", "RP", "SCRIPT", "STYLE", "HEAD"]);
+  var INVISIBLE_CODE_POINTS = /* @__PURE__ */ new Set([8203, 8204, 173]);
+  function extractLayoutText(root) {
+    const parts = [];
+    walkLayout(root, root, (chunk) => parts.push(chunk));
+    return parts.join("");
   }
-  function innerTextOffsetInParagraph(paragraph, range) {
+  function layoutOffsetAtRange(root, range) {
     const targetNode = range.startContainer;
     const targetOffset = range.startOffset;
     let offset = 0;
     let found = false;
-    const walker = createVisibleTextWalker(paragraph);
-    let node = walker.nextNode();
-    while (node) {
-      if (node === targetNode) {
-        offset += targetOffset;
+    walkLayout(root, root, (chunk, meta) => {
+      if (found) {
+        return;
+      }
+      if ((meta == null ? void 0 : meta.kind) === "text" && meta.node === targetNode) {
+        offset += visibleOffsetInTextNode(meta.node, targetOffset);
         found = true;
-        break;
+        return;
       }
-      offset += (node.textContent || "").length;
-      node = walker.nextNode();
-    }
-    if (!found) {
-      return charOffsetInParagraph(paragraph, range);
-    }
-    return offset;
+      offset += chunk.length;
+    });
+    return found ? offset : null;
   }
-  function charOffsetToPoint(root, targetOffset) {
+  function layoutRangeAtOffset(root, targetOffset) {
     let current = 0;
-    const walker = createVisibleTextWalker(root);
-    let node = walker.nextNode();
-    while (node) {
-      const length = (node.textContent || "").length;
-      if (current + length >= targetOffset) {
-        const range = document.createRange();
-        const localOffset = Math.max(0, targetOffset - current);
-        range.setStart(node, Math.min(localOffset, length));
-        range.collapse(true);
-        return range;
+    let result = null;
+    walkLayout(root, root, (chunk, meta) => {
+      if (result) {
+        return;
       }
-      current += length;
-      node = walker.nextNode();
+      const start = current;
+      const end = current + chunk.length;
+      if (targetOffset >= start && targetOffset < end) {
+        if ((meta == null ? void 0 : meta.kind) === "text") {
+          const range = document.createRange();
+          const rawOffset = rawOffsetForVisibleIndex(meta.node, targetOffset - start);
+          range.setStart(meta.node, rawOffset);
+          range.collapse(true);
+          result = range;
+        }
+      }
+      current = end;
+    });
+    return result;
+  }
+  function layoutSegmentsForRange(root, start, end) {
+    if (start >= end) {
+      return [];
+    }
+    const segments = [];
+    let current = 0;
+    walkLayout(root, root, (chunk, meta) => {
+      const chunkStart = current;
+      const chunkEnd = current + chunk.length;
+      if ((meta == null ? void 0 : meta.kind) === "text" && end > chunkStart && start < chunkEnd) {
+        segments.push({
+          node: meta.node,
+          localStart: Math.max(0, start - chunkStart),
+          localEnd: Math.min(chunk.length, end - chunkStart)
+        });
+      }
+      current = chunkEnd;
+    });
+    return segments;
+  }
+  function layoutRangeForSpan(root, start, end) {
+    const segments = layoutSegmentsForRange(root, start, end);
+    if (segments.length === 0) {
+      return null;
+    }
+    const first = segments[0];
+    const last = segments[segments.length - 1];
+    const range = document.createRange();
+    range.setStart(first.node, rawOffsetForVisibleIndex(first.node, first.localStart));
+    range.setEnd(last.node, rawOffsetForVisibleIndex(last.node, last.localEnd));
+    return range;
+  }
+  function walkLayout(node, root, emit) {
+    if (node.nodeType === Node.TEXT_NODE) {
+      if (isInsideTag(node, root, "rt")) {
+        return;
+      }
+      const filtered = filterInvisible(node.textContent || "");
+      if (filtered.length > 0) {
+        emit(filtered, { kind: "text", node });
+      }
+      return;
+    }
+    if (node.nodeType !== Node.ELEMENT_NODE) {
+      return;
+    }
+    const tag = node.tagName.toUpperCase();
+    if (SKIP_TAGS2.has(tag)) {
+      return;
+    }
+    if (tag === "BR") {
+      emit("\n", { kind: "newline" });
+      return;
+    }
+    for (const child of node.childNodes) {
+      walkLayout(child, root, emit);
+    }
+  }
+  function filterInvisible(text) {
+    let result = "";
+    for (const char of text) {
+      if (!INVISIBLE_CODE_POINTS.has(char.charCodeAt(0))) {
+        result += char;
+      }
+    }
+    return result;
+  }
+  function visibleOffsetInTextNode(node, rawOffset) {
+    const text = node.textContent || "";
+    const clamped = Math.max(0, Math.min(rawOffset, text.length));
+    let visible = 0;
+    for (let i = 0; i < clamped; i += 1) {
+      if (!INVISIBLE_CODE_POINTS.has(text.charCodeAt(i))) {
+        visible += 1;
+      }
+    }
+    return visible;
+  }
+  function visibleToRawOffset(node, visibleOffset) {
+    return rawOffsetForVisibleIndex(node, visibleOffset);
+  }
+  function rawOffsetForVisibleIndex(node, visibleIndex) {
+    const text = node.textContent || "";
+    let visible = 0;
+    for (let raw = 0; raw <= text.length; raw += 1) {
+      if (visible === visibleIndex) {
+        return raw;
+      }
+      if (raw < text.length && !INVISIBLE_CODE_POINTS.has(text.charCodeAt(raw))) {
+        visible += 1;
+      }
+    }
+    return text.length;
+  }
+
+  // reader/src/text/snap-offset.ts
+  var MAX_SNAP_DISTANCE = 3;
+  function snapToContentOffset(text, charOffset) {
+    if (text.length === 0) {
+      return null;
+    }
+    const clamped = Math.max(0, Math.min(charOffset, text.length - 1));
+    if (isContentChar(text[clamped])) {
+      return clamped;
+    }
+    for (let delta = 1; delta <= MAX_SNAP_DISTANCE; delta += 1) {
+      if (clamped - delta >= 0 && isContentChar(text[clamped - delta])) {
+        return clamped - delta;
+      }
+      if (clamped + delta < text.length && isContentChar(text[clamped + delta])) {
+        return clamped + delta;
+      }
     }
     return null;
   }
+  function isContentChar(character) {
+    return /[\p{L}\p{N}]/u.test(character);
+  }
+
+  // reader/src/text/paragraph-index.ts
+  var PARAGRAPH_INDEX_ATTR = "data-natsu-paragraph-index";
 
   // reader/src/text/range-from-point.ts
-  function findTextNodeInElement(element) {
-    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
-    const node = walker.nextNode();
-    return (node == null ? void 0 : node.nodeType) === Node.TEXT_NODE ? node : null;
-  }
+  var PREFERRED_BLOCK_TAGS = /* @__PURE__ */ new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
   function findParagraphElement(node) {
     let current = node;
+    let divFallback = null;
     while (current && current !== document.body) {
-      if (current.nodeType === Node.ELEMENT_NODE && /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i.test(current.tagName)) {
-        return current;
+      if (current.nodeType === Node.ELEMENT_NODE) {
+        const element = current;
+        const tag = element.tagName.toUpperCase();
+        if (PREFERRED_BLOCK_TAGS.has(tag)) {
+          return element;
+        }
+        if (tag === "DIV" && divFallback === null) {
+          divFallback = element;
+        }
       }
       current = current.parentNode;
     }
-    return document.body;
+    return divFallback;
   }
-  function rangeFromPoint(clientX, clientY) {
+  function paragraphIndexFromElement(paragraph) {
+    const raw = paragraph.getAttribute(PARAGRAPH_INDEX_ATTR);
+    if (raw === null) {
+      return -1;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isNaN(parsed) ? -1 : parsed;
+  }
+  function caretRangeFromPoint(clientX, clientY) {
     const doc = document;
-    let range = null;
-    if (doc.caretRangeFromPoint) {
-      range = doc.caretRangeFromPoint(clientX, clientY);
-    } else if (doc.caretPositionFromPoint) {
+    if (typeof doc.caretPositionFromPoint === "function") {
       const position = doc.caretPositionFromPoint(clientX, clientY);
-      if (position) {
-        range = doc.createRange();
+      if (position == null ? void 0 : position.offsetNode) {
+        const range = document.createRange();
         range.setStart(position.offsetNode, position.offset);
         range.collapse(true);
+        return range;
       }
     }
-    if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+    if (typeof doc.caretRangeFromPoint === "function") {
+      return doc.caretRangeFromPoint(clientX, clientY);
+    }
+    return null;
+  }
+  function isPointInRange(clientX, clientY, range) {
+    if (range.startContainer.nodeType !== Node.TEXT_NODE) {
+      return false;
+    }
+    const startContainer = range.startContainer;
+    const startOffset = range.startOffset;
+    const endContainer = range.endContainer;
+    const endOffset = range.endOffset;
+    try {
+      const forward = new DOMTextScanner(startContainer, startOffset).seek(1);
+      range.setEnd(forward.node, forward.offset);
+      if (!isWhitespace(forward.content) && pointInAnyRect(clientX, clientY, range.getClientRects())) {
+        return true;
+      }
+    } finally {
+      range.setStart(startContainer, startOffset);
+      range.setEnd(endContainer, endOffset);
+      range.collapse(true);
+    }
+    const backward = new DOMTextScanner(startContainer, startOffset, false).seek(-1);
+    range.setStart(backward.node, backward.offset);
+    range.setEnd(backward.node, backward.offset);
+    const matched = !isWhitespace(backward.content) && pointInAnyRect(clientX, clientY, range.getClientRects());
+    range.setStart(startContainer, startOffset);
+    range.collapse(true);
+    return matched;
+  }
+  function rangeFromPoint(clientX, clientY) {
+    const range = caretRangeFromPoint(clientX, clientY);
+    if (!range) {
+      return null;
+    }
+    if (range.startContainer.nodeType !== Node.TEXT_NODE) {
+      return null;
+    }
+    if (isPointInRange(clientX, clientY, range)) {
       return range;
     }
-    const element = doc.elementFromPoint(clientX, clientY);
-    if (!element) {
-      return null;
-    }
-    const textNode = findTextNodeInElement(element);
-    if (!textNode) {
-      return null;
-    }
-    range = doc.createRange();
-    range.setStart(textNode, 0);
-    range.collapse(true);
     return range;
   }
   function getTapContext(clientX, clientY) {
@@ -150,14 +478,30 @@
       return null;
     }
     const paragraph = findParagraphElement(range.startContainer);
-    const text = paragraph.innerText || paragraph.textContent || "";
+    if (!paragraph) {
+      return null;
+    }
+    const text = extractLayoutText(paragraph);
     if (!text.trim()) {
       return null;
     }
+    const charOffset = layoutOffsetAtRange(paragraph, range);
+    if (charOffset === null) {
+      return null;
+    }
+    const snappedOffset = snapToContentOffset(text, charOffset);
+    if (snappedOffset === null) {
+      return null;
+    }
     return {
+      paragraphIndex: paragraphIndexFromElement(paragraph),
       text,
-      charOffset: innerTextOffsetInParagraph(paragraph, range)
+      charOffset: snappedOffset,
+      paragraph
     };
+  }
+  function canTapAtPoint(clientX, clientY) {
+    return getTapContext(clientX, clientY) !== null;
   }
 
   // reader/src/events.ts
@@ -179,14 +523,35 @@
     const ratio = scrollHeight > 0 ? doc.scrollTop / scrollHeight : 0;
     callBridge("onScrollProgress", ratio);
   }
+  function clearNativeSelection() {
+    const selection = window.getSelection();
+    if (selection && selection.rangeCount > 0) {
+      selection.removeAllRanges();
+    }
+  }
   function handleWordTap(clientX, clientY) {
     const result = getTapContext(clientX, clientY);
+    clearNativeSelection();
     if (!result) {
       return;
     }
-    callBridge("onWordTap", result.text, result.charOffset);
+    callBridge("onWordTap", result.paragraphIndex, result.charOffset, result.text);
   }
   function installEventListeners() {
+    document.addEventListener(
+      "selectstart",
+      (event) => {
+        event.preventDefault();
+      },
+      true
+    );
+    document.addEventListener(
+      "contextmenu",
+      (event) => {
+        event.preventDefault();
+      },
+      true
+    );
     document.addEventListener(
       "touchstart",
       (event) => {
@@ -210,7 +575,8 @@
         if (dx * dx + dy * dy > TAP_MOVE_THRESHOLD_PX * TAP_MOVE_THRESHOLD_PX) {
           return;
         }
-        if (!getTapContext(touch.clientX, touch.clientY)) {
+        clearNativeSelection();
+        if (!canTapAtPoint(touch.clientX, touch.clientY)) {
           return;
         }
         event.preventDefault();
@@ -223,8 +589,10 @@
       "click",
       (event) => {
         if (Date.now() - lastTouchTapAt < TAP_CLICK_SUPPRESS_MS) {
+          event.preventDefault();
           return;
         }
+        clearNativeSelection();
         handleWordTap(event.clientX, event.clientY);
       },
       true
@@ -248,42 +616,22 @@
   }
   function highlightRange(root, start, end) {
     var _a;
-    const segments = [];
-    let current = 0;
-    const walker = createVisibleTextWalker(root);
-    let node = walker.nextNode();
-    while (node) {
-      if (node.nodeType !== Node.TEXT_NODE) {
-        node = walker.nextNode();
-        continue;
-      }
-      const textNode = node;
-      const length = (textNode.textContent || "").length;
-      const nodeStart = current;
-      const nodeEnd = current + length;
-      if (end > nodeStart && start < nodeEnd) {
-        segments.push({
-          node: textNode,
-          localStart: Math.max(0, start - nodeStart),
-          localEnd: Math.min(length, end - nodeStart)
-        });
-      }
-      current = nodeEnd;
-      node = walker.nextNode();
-    }
-    for (let i = segments.length - 1; i >= 0; i--) {
+    const segments = layoutSegmentsForRange(root, start, end);
+    for (let i = segments.length - 1; i >= 0; i -= 1) {
       const seg = segments[i];
       const localLength = seg.localEnd - seg.localStart;
       if (localLength <= 0) {
         continue;
       }
       const textNode = seg.node;
-      if (seg.localEnd < textNode.length) {
-        textNode.splitText(seg.localEnd);
+      const rawEnd = visibleToRawOffset(textNode, seg.localEnd);
+      const rawStart = visibleToRawOffset(textNode, seg.localStart);
+      if (rawEnd < textNode.length) {
+        textNode.splitText(rawEnd);
       }
       let highlightNode = textNode;
-      if (seg.localStart > 0) {
-        highlightNode = textNode.splitText(seg.localStart);
+      if (rawStart > 0) {
+        highlightNode = textNode.splitText(rawStart);
       }
       const mark = document.createElement("mark");
       mark.className = "natsu-search-highlight";
@@ -305,52 +653,126 @@
     });
   }
 
+  // reader/src/features/tap-highlight.ts
+  var FLASH_MS = 300;
+  var activeFlashTimeout = null;
+  function highlightTapToken(paragraphIndex, start, end) {
+    if (paragraphIndex < 0 || start >= end) {
+      return;
+    }
+    const paragraph = findParagraphByIndex(paragraphIndex);
+    if (!paragraph) {
+      return;
+    }
+    flashTapRange(paragraph, start, end);
+  }
+  function flashTapRange(paragraph, start, end) {
+    var _a;
+    clearTapFlash();
+    if (activeFlashTimeout !== null) {
+      window.clearTimeout(activeFlashTimeout);
+      activeFlashTimeout = null;
+    }
+    const segments = layoutSegmentsForRange(paragraph, start, end);
+    if (segments.length === 0) {
+      return;
+    }
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+      const segment = segments[index];
+      const localLength = segment.localEnd - segment.localStart;
+      if (localLength <= 0) {
+        continue;
+      }
+      const textNode = segment.node;
+      const rawEnd = visibleToRawOffset(textNode, segment.localEnd);
+      const rawStart = visibleToRawOffset(textNode, segment.localStart);
+      if (rawEnd < textNode.length) {
+        textNode.splitText(rawEnd);
+      }
+      let flashNode = textNode;
+      if (rawStart > 0) {
+        flashNode = textNode.splitText(rawStart);
+      }
+      const mark = document.createElement("span");
+      mark.className = "natsu-tap-flash";
+      (_a = flashNode.parentNode) == null ? void 0 : _a.replaceChild(mark, flashNode);
+      mark.appendChild(flashNode);
+    }
+    activeFlashTimeout = window.setTimeout(() => {
+      clearTapFlash();
+      activeFlashTimeout = null;
+    }, FLASH_MS);
+  }
+  function clearTapFlash() {
+    document.querySelectorAll("span.natsu-tap-flash").forEach((mark) => {
+      const parent = mark.parentNode;
+      if (!parent) {
+        return;
+      }
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+      parent.removeChild(mark);
+      if (parent instanceof HTMLElement) {
+        parent.normalize();
+      }
+    });
+  }
+  function findParagraphByIndex(paragraphIndex) {
+    return document.querySelector("[".concat(PARAGRAPH_INDEX_ATTR, '="').concat(paragraphIndex, '"]'));
+  }
+
   // reader/src/features/ruby.ts
   function injectRuby(tokens) {
     if (!(tokens == null ? void 0 : tokens.length)) {
       return;
     }
     const root = collectTextRoot();
-    tokens.forEach((token) => {
-      if (!token.surface || !token.reading) {
-        return;
-      }
-      const walker = createInjectableTextWalker(root);
-      let node = walker.nextNode();
-      while (node) {
-        const parent = node.parentNode;
-        if (!parent) {
-          node = walker.nextNode();
-          continue;
-        }
-        const text = node.textContent || "";
-        const index = text.indexOf(token.surface);
-        if (index < 0) {
-          node = walker.nextNode();
-          continue;
-        }
-        const before = text.slice(0, index);
-        const after = text.slice(index + token.surface.length);
-        const ruby = document.createElement("ruby");
-        ruby.setAttribute("data-natsu-surface", token.surface);
-        const rb = document.createElement("rb");
-        rb.textContent = token.surface;
-        const rt = document.createElement("rt");
-        rt.textContent = token.reading;
-        ruby.appendChild(rb);
-        ruby.appendChild(rt);
-        const fragment = document.createDocumentFragment();
-        if (before) {
-          fragment.appendChild(document.createTextNode(before));
-        }
-        fragment.appendChild(ruby);
-        if (after) {
-          fragment.appendChild(document.createTextNode(after));
-        }
-        parent.replaceChild(fragment, node);
-        break;
-      }
+    const sorted = [...tokens].sort((left, right) => right.start - left.start);
+    sorted.forEach((token) => {
+      injectRubyAtLayoutSpan(root, token);
     });
+  }
+  function injectRubyAtLayoutSpan(root, token) {
+    if (!token.surface || !token.reading || token.start >= token.end) {
+      return;
+    }
+    if (document.querySelector('ruby[data-natsu-layout-start="'.concat(token.start, '"]'))) {
+      return;
+    }
+    const range = layoutRangeForSpan(root, token.start, token.end);
+    if (!range || isInsideExistingRuby(range.startContainer, root)) {
+      return;
+    }
+    const ruby = document.createElement("ruby");
+    ruby.setAttribute("data-natsu-layout-start", String(token.start));
+    ruby.setAttribute("data-natsu-surface", token.surface);
+    const rb = document.createElement("rb");
+    const rt = document.createElement("rt");
+    rt.textContent = token.reading;
+    try {
+      const contents = range.extractContents();
+      rb.appendChild(contents);
+      ruby.appendChild(rb);
+      ruby.appendChild(rt);
+      range.insertNode(ruby);
+    } catch (e) {
+    }
+  }
+  function isInsideExistingRuby(node, root) {
+    let current = node;
+    while (current && current !== root) {
+      if (current.nodeType === Node.ELEMENT_NODE && current.tagName.toUpperCase() === "RUBY") {
+        return true;
+      }
+      current = current.parentNode;
+    }
+    return false;
+  }
+
+  // reader/src/text/offset.ts
+  function charOffsetToPoint(root, targetOffset) {
+    return layoutRangeAtOffset(root, targetOffset);
   }
 
   // reader/src/features/scroll.ts
@@ -363,6 +785,81 @@
     const rect = range.getBoundingClientRect();
     const targetTop = window.scrollY + rect.top - window.innerHeight * 0.3;
     window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
+  }
+
+  // reader/src/features/tag-paragraphs.ts
+  var PREFERRED_BLOCK_TAGS2 = /* @__PURE__ */ new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
+  var NESTED_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, td, blockquote, div";
+  function tagParagraphs(expectedTexts) {
+    if (!(expectedTexts == null ? void 0 : expectedTexts.length)) {
+      return;
+    }
+    const root = collectTextRoot();
+    const blocks = collectLayoutBlocks(root);
+    let cursor = 0;
+    blocks.forEach((block) => {
+      if (block.hasAttribute(PARAGRAPH_INDEX_ATTR)) {
+        return;
+      }
+      const text = extractLayoutText(block);
+      if (!text.trim()) {
+        return;
+      }
+      const matchedIndex = matchParagraphIndex(text, expectedTexts, cursor);
+      if (matchedIndex >= 0) {
+        block.setAttribute(PARAGRAPH_INDEX_ATTR, String(matchedIndex));
+        cursor = matchedIndex + 1;
+      }
+    });
+  }
+  function matchParagraphIndex(text, expectedTexts, cursor) {
+    if (cursor < expectedTexts.length && textsMatch(text, expectedTexts[cursor])) {
+      return cursor;
+    }
+    return expectedTexts.findIndex((expected, index) => index >= cursor && textsMatch(text, expected));
+  }
+  function collectLayoutBlocks(root) {
+    const blocks = [];
+    collectBlocksFrom(root, blocks);
+    return blocks;
+  }
+  function collectBlocksFrom(container, blocks) {
+    container.childNodes.forEach((child) => {
+      if (child.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+      const element = child;
+      const tag = element.tagName.toUpperCase();
+      if (PREFERRED_BLOCK_TAGS2.has(tag)) {
+        if (extractLayoutText(element).trim()) {
+          blocks.push(element);
+        }
+        return;
+      }
+      if (tag === "DIV") {
+        if (hasNestedLayoutBlock(element)) {
+          collectBlocksFrom(element, blocks);
+        } else if (extractLayoutText(element).trim()) {
+          blocks.push(element);
+        }
+        return;
+      }
+      if (hasNestedLayoutBlock(element)) {
+        collectBlocksFrom(element, blocks);
+      }
+    });
+  }
+  function hasNestedLayoutBlock(element) {
+    return element.querySelector(NESTED_BLOCK_SELECTOR) !== null;
+  }
+  function textsMatch(actual, expected) {
+    if (actual === expected) {
+      return true;
+    }
+    return normalizeLayoutText(actual) === normalizeLayoutText(expected);
+  }
+  function normalizeLayoutText(text) {
+    return text.replace(/\s+/g, " ").trim();
   }
 
   // reader/src/messages.ts
@@ -442,6 +939,8 @@
         });
       },
       applyTheme,
+      tagParagraphs,
+      highlightTapToken,
       highlightSearch,
       injectRuby,
       scrollToOffset

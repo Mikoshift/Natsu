@@ -1,11 +1,6 @@
 import type { SearchRange } from "../types.js";
-import { createVisibleTextWalker, collectTextRoot } from "../text/walker.js";
-
-interface HighlightSegment {
-  node: Text;
-  localStart: number;
-  localEnd: number;
-}
+import { layoutSegmentsForRange, visibleToRawOffset } from "../text/layout-text.js";
+import { collectTextRoot } from "../text/walker.js";
 
 export function clearHighlights(): void {
   document.querySelectorAll("mark.natsu-search-highlight").forEach((mark) => {
@@ -22,43 +17,22 @@ export function clearHighlights(): void {
 }
 
 function highlightRange(root: Node, start: number, end: number): void {
-  const segments: HighlightSegment[] = [];
-  let current = 0;
-  const walker = createVisibleTextWalker(root);
-  let node = walker.nextNode();
-  while (node) {
-    if (node.nodeType !== Node.TEXT_NODE) {
-      node = walker.nextNode();
-      continue;
-    }
-    const textNode = node as Text;
-    const length = (textNode.textContent || "").length;
-    const nodeStart = current;
-    const nodeEnd = current + length;
-    if (end > nodeStart && start < nodeEnd) {
-      segments.push({
-        node: textNode,
-        localStart: Math.max(0, start - nodeStart),
-        localEnd: Math.min(length, end - nodeStart),
-      });
-    }
-    current = nodeEnd;
-    node = walker.nextNode();
-  }
-
-  for (let i = segments.length - 1; i >= 0; i--) {
+  const segments = layoutSegmentsForRange(root, start, end);
+  for (let i = segments.length - 1; i >= 0; i -= 1) {
     const seg = segments[i];
     const localLength = seg.localEnd - seg.localStart;
     if (localLength <= 0) {
       continue;
     }
     const textNode = seg.node;
-    if (seg.localEnd < textNode.length) {
-      textNode.splitText(seg.localEnd);
+    const rawEnd = visibleToRawOffset(textNode, seg.localEnd);
+    const rawStart = visibleToRawOffset(textNode, seg.localStart);
+    if (rawEnd < textNode.length) {
+      textNode.splitText(rawEnd);
     }
     let highlightNode = textNode;
-    if (seg.localStart > 0) {
-      highlightNode = textNode.splitText(seg.localStart);
+    if (rawStart > 0) {
+      highlightNode = textNode.splitText(rawStart);
     }
     const mark = document.createElement("mark");
     mark.className = "natsu-search-highlight";

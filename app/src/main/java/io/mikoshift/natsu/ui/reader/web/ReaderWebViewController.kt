@@ -50,10 +50,26 @@ class ReaderWebViewController {
         postReaderCall("highlightSearch", payload)
     }
 
+    fun tagParagraphs(paragraphs: List<String>) {
+        if (paragraphs.isEmpty()) return
+        postReaderCall("tagParagraphs", paragraphs)
+    }
+
     fun injectRuby(tokens: List<FuriganaInjectToken>) {
         if (tokens.isEmpty()) return
-        val payload = tokens.map { mapOf("surface" to it.surface, "reading" to it.reading) }
+        val payload = tokens.map {
+            mapOf(
+                "surface" to it.surface,
+                "reading" to it.reading,
+                "start" to it.start,
+                "end" to it.end,
+            )
+        }
         postReaderCall("injectRuby", payload)
+    }
+
+    fun highlightTapToken(paragraphIndex: Int, start: Int, end: Int) {
+        postReaderCall("highlightTapToken", paragraphIndex, start, end)
     }
 
     fun scrollToOffset(charOffset: Int) {

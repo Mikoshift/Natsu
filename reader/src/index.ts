@@ -1,8 +1,10 @@
 import { callBridge } from "./native-bridge.js";
 import { installEventListeners } from "./events.js";
 import { highlightSearch } from "./features/highlight.js";
+import { highlightTapToken } from "./features/tap-highlight.js";
 import { injectRuby } from "./features/ruby.js";
 import { scrollToOffset } from "./features/scroll.js";
+import { tagParagraphs } from "./features/tag-paragraphs.js";
 import { installMessageListener, scheduleReaderInit } from "./messages.js";
 import { applyTheme } from "./theme.js";
 import type { ReaderApi } from "./types.js";
@@ -27,6 +29,8 @@ import type { ReaderApi } from "./types.js";
     },
 
     applyTheme,
+    tagParagraphs,
+    highlightTapToken,
     highlightSearch,
     injectRuby,
     scrollToOffset,

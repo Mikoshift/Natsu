@@ -54,7 +54,7 @@ class ReaderWebViewInstrumentedTest {
                     documentId = documentId,
                 )
                 val jsBridge = ReaderJsBridge(
-                    onWordTap = { _, _ -> },
+                    onWordTap = { _, _, _ -> },
                     onScrollProgress = {},
                     onBridgeReady = { controller.onBridgeReady() },
                     onChapterReady = {},
@@ -122,7 +122,7 @@ class ReaderWebViewInstrumentedTest {
                     documentId = documentId,
                 )
                 val jsBridge = ReaderJsBridge(
-                    onWordTap = { _, _ -> },
+                    onWordTap = { _, _, _ -> },
                     onScrollProgress = {},
                     onBridgeReady = { controller.onBridgeReady() },
                     onChapterReady = {

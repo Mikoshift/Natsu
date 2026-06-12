@@ -53,6 +53,59 @@ class ReaderWordTapTest {
         assertEquals("猫", tapped?.surface)
     }
 
+    @Test
+    fun resolveTapToken_onPunctuation_findsNearestClickableToken() {
+        val tokens = listOf(
+            token("吾輩は"),
+            punctuation("、"),
+            token("猫"),
+        )
+
+        val tapped = ReaderWordTap.resolveTapToken(tokens, charOffset = 3)
+
+        assertEquals("猫", tapped?.surface)
+    }
+
+    @Test
+    fun resolveTapToken_outOfRange_doesNotFallbackToFirstToken() {
+        val tokens = listOf(
+            token("吾輩は"),
+            token("猫"),
+        )
+
+        assertNull(ReaderWordTap.resolveTapToken(tokens, charOffset = 99))
+    }
+
+    @Test
+    fun resolveTapMatch_returnsTokenBounds() {
+        val tokens = listOf(
+            token("吾輩は"),
+            token("猫"),
+            token("である"),
+        )
+
+        val match = ReaderWordTap.resolveTapMatch(tokens, charOffset = 3)
+
+        assertEquals("猫", match?.token?.surface)
+        assertEquals(3, match?.start)
+        assertEquals(4, match?.end)
+    }
+
+    @Test
+    fun resolveTapMatch_onPunctuation_returnsNearestClickableBounds() {
+        val tokens = listOf(
+            token("吾輩は"),
+            punctuation("、"),
+            token("猫"),
+        )
+
+        val match = ReaderWordTap.resolveTapMatch(tokens, charOffset = 3)
+
+        assertEquals("猫", match?.token?.surface)
+        assertEquals(4, match?.start)
+        assertEquals(5, match?.end)
+    }
+
     private fun token(surface: String): TextToken =
         TextToken(
             surface = surface,
@@ -60,5 +113,14 @@ class ReaderWordTapTest {
             lemma = surface,
             partOfSpeech = "名詞",
             isClickable = true,
+        )
+
+    private fun punctuation(surface: String): TextToken =
+        TextToken(
+            surface = surface,
+            reading = surface,
+            lemma = surface,
+            partOfSpeech = "記号",
+            isClickable = false,
         )
 }
