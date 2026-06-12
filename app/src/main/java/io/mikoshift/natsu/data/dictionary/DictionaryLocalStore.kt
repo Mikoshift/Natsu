@@ -110,7 +110,7 @@ class DictionaryLocalStore(context: Context) {
                 (id, title, revision, enabled, priority, installed_at)
                 VALUES (?, ?, ?, ?, ?, ?)
                 """.trimIndent(),
-                arrayOf(
+                arrayOf<Any>(
                     record.id,
                     record.title,
                     record.revision,

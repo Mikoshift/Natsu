@@ -30,7 +30,7 @@ class EpubPublicationOpener(
 
     suspend fun open(epubFile: File): Publication {
         require(epubFile.isFile) { "EPUB path is not a file: ${epubFile.absolutePath}" }
-        val url = epubFile.toUrl()
+        val url = epubFile.toUrl(isDirectory = false)
         val asset = assetRetriever.retrieve(url).getOrElse { error ->
             throw IllegalStateException("Failed to retrieve EPUB asset: $error")
         }
