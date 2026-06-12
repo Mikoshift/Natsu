@@ -23,7 +23,7 @@ import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.ui.reader.FuriganaInjectToken
 import java.io.File
 
-@SuppressLint("SetJavaScriptEnabled")
+@SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
 @Composable
 fun ReaderWebView(
     bookDir: File,

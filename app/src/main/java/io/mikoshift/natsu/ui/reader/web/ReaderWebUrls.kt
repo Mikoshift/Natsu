@@ -48,6 +48,6 @@ object ReaderWebUrls {
     }
 
     private fun decodePath(path: String): String {
-        return URLDecoder.decode(path, StandardCharsets.UTF_8)
+        return URLDecoder.decode(path, "UTF-8")
     }
 }
