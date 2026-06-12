@@ -80,6 +80,29 @@ class LoaderContractTest {
     }
 
     @Test
+    fun plainTextLoader_satisfiesContract_htmlChapter() = runBlocking {
+        val booksRoot = createBooksRoot()
+        val html = io.mikoshift.natsu.data.book.html.HtmlChapterGenerator.fromPlainText(
+            "Line one\n\nLine two",
+        )
+        val book = LoaderTestBooks.loadPlainTextBook(
+            booksRoot = booksRoot,
+            sections = listOf(
+                LoaderTestSection(
+                    id = "main",
+                    path = BookStorage.HTML_CONTENT_PATH,
+                    content = html,
+                ),
+            ),
+        )
+
+        LoaderContract.verify(
+            book = book,
+            searchQueries = listOf("Line", "two"),
+        )
+    }
+
+    @Test
     fun markdownLoader_satisfiesContract_withHeadingsAndImage() = runBlocking {
         val booksRoot = createBooksRoot()
         val sections = listOf(

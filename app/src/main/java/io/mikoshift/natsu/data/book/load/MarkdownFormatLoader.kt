@@ -16,6 +16,20 @@ class MarkdownFormatLoader : FormatReadingLoader {
         require(contentFile.exists()) {
             "Section content not found: ${section.path}"
         }
+        if (isHtmlPath(section.path)) {
+            return HtmlSectionBlocks.loadSection(
+                bookDir = bookDir,
+                section = section,
+                contentFile = contentFile,
+                resolveImagePath = { destination ->
+                    resolveAssetPath(
+                        bookDir = bookDir,
+                        sectionPath = section.path,
+                        destination = destination,
+                    )
+                },
+            )
+        }
         val markdown = contentFile.readText(StandardCharsets.UTF_8)
         val blocks = MarkdownToReadingBlocks.parse(markdown).mapNotNull { block ->
             when (block) {
@@ -59,5 +73,10 @@ class MarkdownFormatLoader : FormatReadingLoader {
     private fun isRemoteUrl(path: String): Boolean {
         return path.startsWith("http://", ignoreCase = true) ||
             path.startsWith("https://", ignoreCase = true)
+    }
+
+    private fun isHtmlPath(path: String): Boolean {
+        val lower = path.lowercase()
+        return lower.endsWith(".html") || lower.endsWith(".htm") || lower.endsWith(".xhtml")
     }
 }

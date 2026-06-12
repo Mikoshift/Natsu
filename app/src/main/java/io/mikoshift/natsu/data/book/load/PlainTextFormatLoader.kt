@@ -18,6 +18,13 @@ class PlainTextFormatLoader : FormatReadingLoader {
         require(contentFile.exists()) {
             "Section content not found: ${section.path}"
         }
+        if (isHtmlPath(section.path)) {
+            return HtmlSectionBlocks.loadSection(
+                bookDir = bookDir,
+                section = section,
+                contentFile = contentFile,
+            )
+        }
         val text = contentFile.readText(StandardCharsets.UTF_8)
         val layout = buildParagraphLayout(text)
         val blocks = layout.paragraphs.map { paragraph ->
@@ -28,5 +35,10 @@ class PlainTextFormatLoader : FormatReadingLoader {
             title = section.title,
             blocks = blocks,
         )
+    }
+
+    private fun isHtmlPath(path: String): Boolean {
+        val lower = path.lowercase()
+        return lower.endsWith(".html") || lower.endsWith(".htm") || lower.endsWith(".xhtml")
     }
 }

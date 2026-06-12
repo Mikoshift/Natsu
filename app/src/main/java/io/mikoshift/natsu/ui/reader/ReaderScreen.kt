@@ -1,12 +1,8 @@
 package io.mikoshift.natsu.ui.reader
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.List
@@ -27,7 +23,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -35,10 +30,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.mikoshift.natsu.R
+import io.mikoshift.natsu.ui.reader.web.ReaderWebView
+import io.mikoshift.natsu.ui.reader.web.ReaderWebViewController
 import io.mikoshift.natsu.ui.theme.ReaderThemeWrapper
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,68 +45,21 @@ fun ReaderScreen(
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val readerSettings by viewModel.readerSettings.collectAsStateWithLifecycle()
-    val listState = rememberLazyListState()
+    val webViewController = remember { ReaderWebViewController() }
     val contentReady = !uiState.isLoading &&
         uiState.errorMessage == null &&
-        uiState.displayItems.isNotEmpty()
+        uiState.chapterUrl != null &&
+        uiState.bookStoragePath != null &&
+        uiState.bookDocumentId != null
 
     LaunchedEffect(documentId) {
         viewModel.loadDocument(documentId)
     }
 
-    LaunchedEffect(contentReady, uiState.scrollToDisplayIndex, uiState.scrollRequestId) {
-        if (contentReady && uiState.scrollToDisplayIndex > 0) {
-            listState.scrollToItem(
-                uiState.scrollToDisplayIndex.coerceAtMost(uiState.displayItems.lastIndex),
-            )
-        }
-    }
-
-    var highlightCenterY by remember { mutableStateOf<Float?>(null) }
-
-    LaunchedEffect(contentReady, uiState.searchHighlight?.scrollRequestId) {
-        val highlight = uiState.searchHighlight ?: return@LaunchedEffect
-        if (!contentReady) return@LaunchedEffect
-
-        highlightCenterY = null
-        val displayIndex = ReaderDisplayBuilder.displayIndexForLayoutParagraph(
-            items = uiState.displayItems,
-            layoutParagraphIndex = highlight.paragraphIndex,
-        )
-        listState.scrollToItem(displayIndex.coerceAtMost(uiState.displayItems.lastIndex))
-        val centerY = snapshotFlow { highlightCenterY }
-            .filterNotNull()
-            .first()
-        val viewportHeight = listState.layoutInfo.viewportSize.height
-        val scrollOffset = (centerY - viewportHeight / 2f).toInt().coerceAtLeast(0)
-        listState.animateScrollToItem(displayIndex, scrollOffset)
-    }
-
-    LaunchedEffect(contentReady, listState) {
-        if (!contentReady) return@LaunchedEffect
-        snapshotFlow { listState.firstVisibleItemIndex }
-            .distinctUntilChanged()
-            .collect { index -> viewModel.saveReadingPosition(index) }
-    }
-
-    LaunchedEffect(contentReady, listState) {
-        if (!contentReady) return@LaunchedEffect
-        snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
-            .distinctUntilChanged()
-            .collect { index ->
-                if (index != null) {
-                    viewModel.onNearEnd(index)
-                }
-            }
-    }
-
     DisposableEffect(contentReady) {
         onDispose {
             if (contentReady) {
-                viewModel.saveReadingPosition(
-                    displayIndex = listState.firstVisibleItemIndex,
-                    immediate = true,
-                )
+                viewModel.flushReadingPosition()
             }
         }
     }
@@ -145,7 +93,7 @@ fun ReaderScreen(
                     navigationIcon = {
                         if (!uiState.searchActive) {
                             IconButton(onClick = {
-                                viewModel.flushReadingPosition(listState.firstVisibleItemIndex)
+                                viewModel.flushReadingPosition()
                                 onBack()
                             }) {
                                 Icon(
@@ -209,49 +157,23 @@ fun ReaderScreen(
                                 .padding(24.dp),
                         )
                     }
-                    else -> {
-                        LazyColumn(
-                            state = listState,
-                            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-                        ) {
-                            itemsIndexed(
-                                items = uiState.displayItems,
-                                key = { index, _ -> index },
-                            ) { index, item ->
-                                val highlight = uiState.searchHighlight
-                                    ?.takeIf { it.paragraphIndex == item.layoutParagraphIndex }
-                                when (val content = item.content) {
-                                    is ReaderBlockContent.Paragraph -> {
-                                        TokenizedParagraph(
-                                            tokens = content.tokens,
-                                            settings = readerSettings,
-                                            onWordClick = viewModel::onWordClicked,
-                                            highlightRange = highlight?.range,
-                                            onHighlightPositioned = if (highlight != null) {
-                                                { y -> highlightCenterY = y }
-                                            } else {
-                                                null
-                                            },
-                                        )
-                                    }
-                                    is ReaderBlockContent.Heading -> {
-                                        ReaderHeading(
-                                            text = content.text,
-                                            level = content.level,
-                                            settings = readerSettings,
-                                            highlightRange = highlight?.range,
-                                        )
-                                    }
-                                    is ReaderBlockContent.Image -> {
-                                        ReaderImage(
-                                            source = content.source,
-                                            alt = content.alt,
-                                            bookStoragePath = content.bookStoragePath,
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                    contentReady -> {
+                        ReaderWebView(
+                            bookDir = File(uiState.bookStoragePath!!),
+                            documentId = uiState.bookDocumentId!!,
+                            chapterUrl = uiState.chapterUrl,
+                            readerSettings = readerSettings,
+                            scrollToCharOffset = uiState.scrollToCharOffset,
+                            scrollRequestId = uiState.scrollRequestId,
+                            searchHighlightRanges = uiState.searchHighlightRanges,
+                            furiganaTokens = uiState.furiganaTokens,
+                            controller = webViewController,
+                            onWordTap = { text, _, _ -> viewModel.onWebWordTap(text) },
+                            onScrollProgress = viewModel::onWebScrollProgress,
+                            onChapterReady = viewModel::onWebChapterReady,
+                            onChapterLink = viewModel::onChapterLink,
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                 }
             }

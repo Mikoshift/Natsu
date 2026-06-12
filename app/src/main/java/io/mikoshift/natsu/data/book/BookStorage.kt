@@ -125,6 +125,8 @@ class BookStorage private constructor(
         const val SEARCH_INDEX_FILE_NAME = "search_index.json"
         const val PLAIN_TEXT_CONTENT_PATH = "content.txt"
         const val MARKDOWN_CONTENT_PATH = "content.md"
+        const val HTML_CONTENT_PATH = "content.html"
+        const val MANIFEST_VERSION_HTML = 2
         const val SOURCE_EPUB_PATH = "source.epub"
         const val MAX_CONTENT_BYTES = 50 * 1024 * 1024
     }

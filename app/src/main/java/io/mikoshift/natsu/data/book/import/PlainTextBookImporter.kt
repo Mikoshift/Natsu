@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import io.mikoshift.natsu.data.book.BookStorage
 import io.mikoshift.natsu.data.book.ImportedBookPackage
+import io.mikoshift.natsu.data.book.html.HtmlChapterGenerator
 import io.mikoshift.natsu.domain.model.reading.BookFormat
 import io.mikoshift.natsu.domain.model.reading.BookManifest
 import io.mikoshift.natsu.domain.model.reading.ManifestSection
@@ -32,20 +33,20 @@ class PlainTextBookImporter(
                 val bookDir = bookStorage.createBookDirectory()
                 bookStorage.writeContentFile(
                     bookDir = bookDir,
-                    relativePath = BookStorage.PLAIN_TEXT_CONTENT_PATH,
-                    content = content,
+                    relativePath = BookStorage.HTML_CONTENT_PATH,
+                    content = HtmlChapterGenerator.fromPlainText(content),
                 )
                 bookStorage.writeManifest(
                     bookDir = bookDir,
                     manifest = BookManifest(
-                        version = MANIFEST_VERSION,
+                        version = BookStorage.MANIFEST_VERSION_HTML,
                         format = BookFormat.PlainText,
                         title = title,
                         sections = listOf(
                             ManifestSection(
                                 id = MAIN_SECTION_ID,
                                 title = null,
-                                path = BookStorage.PLAIN_TEXT_CONTENT_PATH,
+                                path = BookStorage.HTML_CONTENT_PATH,
                             ),
                         ),
                     ),
@@ -61,7 +62,6 @@ class PlainTextBookImporter(
         }
 
     companion object {
-        private const val MANIFEST_VERSION = 1
         private const val MAIN_SECTION_ID = "main"
         private val SUPPORTED_EXTENSIONS = setOf("txt", "text")
         private val MARKDOWN_EXTENSIONS = setOf("md", "markdown")

@@ -75,6 +75,7 @@ dependencies {
     implementation(libs.readium.shared)
     implementation(libs.readium.streamer)
     implementation(libs.jsoup)
+    implementation(libs.androidx.webkit)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
