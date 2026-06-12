@@ -19,4 +19,8 @@ data class DictionaryEntry(
     val queryLemma: String,
     val queryReading: String,
     val senses: List<DictionarySense>,
+    val matchKind: LookupMatchKind = LookupMatchKind.Direct,
+    val matchedExpression: String = querySurface,
+    val matchedReading: String = queryReading,
+    val deinflectionRuleName: String? = null,
 )

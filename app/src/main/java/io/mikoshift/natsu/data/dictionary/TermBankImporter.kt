@@ -115,8 +115,8 @@ class TermBankImporter {
 
         val expression = reader.nextString()
         val reading = if (reader.hasNext()) reader.nextString() else ""
-        if (reader.hasNext()) skipOneValue(reader)
-        if (reader.hasNext()) skipOneValue(reader)
+        val defTags = if (reader.hasNext()) readTermBankTagField(reader) else ""
+        val ruleTags = if (reader.hasNext()) readTermBankTagField(reader) else ""
         val score = if (reader.hasNext()) readScoreValue(reader) else 0
 
         var senseContent = if (reader.hasNext()) {
@@ -153,7 +153,24 @@ class TermBankImporter {
             reading = reading.ifBlank { expression },
             glossesJson = encodeSenseContent(senseContent),
             score = score,
+            defTags = defTags,
+            ruleTags = ruleTags,
         )
+    }
+
+    private fun readTermBankTagField(reader: JsonReader): String {
+        return when (reader.peek()) {
+            JsonToken.STRING -> reader.nextString().trim()
+            JsonToken.NUMBER -> reader.nextString()
+            JsonToken.NULL -> {
+                reader.nextNull()
+                ""
+            }
+            else -> {
+                reader.skipValue()
+                ""
+            }
+        }
     }
 
     private fun readGlossaryField(reader: JsonReader): SenseContentData {

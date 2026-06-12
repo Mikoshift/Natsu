@@ -26,6 +26,7 @@ import io.mikoshift.natsu.domain.repository.TextTokenizer
 import io.mikoshift.natsu.data.settings.ReaderSettingsStore
 import io.mikoshift.natsu.ui.reader.web.ReaderSectionTokenCache
 import io.mikoshift.natsu.ui.reader.web.ReaderWebUrls
+import io.mikoshift.natsu.ui.reader.web.CompoundTokenScanner
 import io.mikoshift.natsu.ui.reader.web.ReaderWordTap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -203,6 +204,7 @@ class ReaderViewModel(
                 sectionTokenCache.tokensByText(sectionId, paragraphText, textTokenizer::tokenize)
             }
         val match = ReaderWordTap.resolveTapMatch(tokens, charOffset) ?: return
+        val tapIndex = tokens.indexOfFirst { it === match.token }
         _uiState.update {
             it.copy(
                 tapHighlightRequest = TapHighlightRequest(
@@ -213,7 +215,7 @@ class ReaderViewModel(
                 tapHighlightRequestId = it.tapHighlightRequestId + 1,
             )
         }
-        onWordClicked(match.token)
+        onWordClicked(token = match.token, tokens = tokens, tapIndex = tapIndex)
     }
 
     fun onWebScrollProgress(ratio: Float) {
@@ -275,15 +277,25 @@ class ReaderViewModel(
         }
     }
 
-    fun onWordClicked(token: TextToken) {
+    fun onWordClicked(
+        token: TextToken,
+        tokens: List<TextToken> = emptyList(),
+        tapIndex: Int = -1,
+    ) {
         if (!token.isClickable) return
         viewModelScope.launch {
             _uiState.update { it.copy(wordLookup = WordLookupState.Loading) }
+            val compoundSurfaces = if (tapIndex >= 0 && tokens.isNotEmpty()) {
+                CompoundTokenScanner.compoundCandidates(tokens, tapIndex)
+            } else {
+                emptyList()
+            }
             val entry = withContext(Dispatchers.IO) {
                 dictionaryRepository.lookup(
                     surface = token.surface,
                     lemma = token.lemma,
                     reading = token.reading,
+                    compoundSurfaces = compoundSurfaces,
                 )
             }
             val suggestInstall = entry == null &&

@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
+import java.util.concurrent.atomic.AtomicInteger
 
 data class DictionaryRecord(
     val id: String,
@@ -24,6 +25,8 @@ data class TermRecord(
     val reading: String,
     val glossesJson: String,
     val score: Int,
+    val defTags: String = "",
+    val ruleTags: String = "",
 )
 
 data class TermLookupRow(
@@ -34,15 +37,25 @@ data class TermLookupRow(
     val reading: String,
     val glossesJson: String,
     val score: Int,
+    val defTags: String = "",
+    val ruleTags: String = "",
 )
 
 class DictionaryLocalStore(context: Context) {
     private val appContext = context.applicationContext
     private val helper = DictionaryOpenHelper(appContext)
     private val changes = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    private val changeGeneration = AtomicInteger(0)
     private var orphansPurged = false
 
     fun observeChanges() = changes.asSharedFlow()
+
+    fun currentChangeGeneration(): Int = changeGeneration.get()
+
+    private fun notifyChanged() {
+        changeGeneration.incrementAndGet()
+        changes.tryEmit(Unit)
+    }
 
     suspend fun getAllDictionaries(): List<DictionaryRecord> = withContext(Dispatchers.IO) {
         purgeOrphanTermsIfNeeded()
@@ -120,7 +133,7 @@ class DictionaryLocalStore(context: Context) {
                 ),
             )
         }
-        changes.tryEmit(Unit)
+        notifyChanged()
     }
 
     suspend fun deleteDictionary(id: String) = withContext(Dispatchers.IO) {
@@ -128,7 +141,7 @@ class DictionaryLocalStore(context: Context) {
             db.delete(TABLE_TERMS, "dictionary_id = ?", arrayOf(id))
             db.delete(TABLE_DICTIONARIES, "id = ?", arrayOf(id))
         }
-        changes.tryEmit(Unit)
+        notifyChanged()
     }
 
     suspend fun setEnabled(id: String, enabled: Boolean) = withContext(Dispatchers.IO) {
@@ -138,7 +151,7 @@ class DictionaryLocalStore(context: Context) {
                 arrayOf<Any>(if (enabled) 1 else 0, id),
             )
         }
-        changes.tryEmit(Unit)
+        notifyChanged()
     }
 
     suspend fun updatePriorities(orderedIds: List<String>) = withContext(Dispatchers.IO) {
@@ -156,7 +169,7 @@ class DictionaryLocalStore(context: Context) {
                 db.endTransaction()
             }
         }
-        changes.tryEmit(Unit)
+        notifyChanged()
     }
 
     suspend fun replaceTerms(dictionaryId: String, terms: List<TermRecord>) = withContext(Dispatchers.IO) {
@@ -173,8 +186,8 @@ class DictionaryLocalStore(context: Context) {
         val statement = db.compileStatement(
             """
             INSERT INTO $TABLE_TERMS
-            (dictionary_id, expression, reading, glosses, score)
-            VALUES (?, ?, ?, ?, ?)
+            (dictionary_id, expression, reading, glosses, score, def_tags, rule_tags)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """.trimIndent(),
         )
         var rowsSinceCommit = 0
@@ -186,6 +199,8 @@ class DictionaryLocalStore(context: Context) {
             statement.bindString(3, term.reading)
             statement.bindString(4, term.glossesJson)
             statement.bindLong(5, term.score.toLong())
+            statement.bindString(6, term.defTags)
+            statement.bindString(7, term.ruleTags)
             statement.executeInsert()
             rowsSinceCommit++
             if (rowsSinceCommit >= COMMIT_EVERY_ROWS) {
@@ -214,7 +229,7 @@ class DictionaryLocalStore(context: Context) {
         } finally {
             db.endTransaction()
         }
-        changes.tryEmit(Unit)
+        notifyChanged()
     }
 
     private fun purgeOrphanTermsIfNeeded() {
@@ -240,7 +255,8 @@ class DictionaryLocalStore(context: Context) {
             val results = linkedMapOf<String, TermLookupRow>()
             db.rawQuery(
                 """
-                SELECT t.dictionary_id, d.title, d.priority, t.expression, t.reading, t.glosses, t.score
+                SELECT t.dictionary_id, d.title, d.priority, t.expression, t.reading,
+                       t.glosses, t.score, t.def_tags, t.rule_tags
                 FROM $TABLE_TERMS t
                 INNER JOIN $TABLE_DICTIONARIES d ON d.id = t.dictionary_id
                 WHERE d.enabled = 1
@@ -266,6 +282,8 @@ class DictionaryLocalStore(context: Context) {
                             reading = cursor.getString(4),
                             glossesJson = cursor.getString(5),
                             score = cursor.getInt(6),
+                            defTags = cursor.getString(7),
+                            ruleTags = cursor.getString(8),
                         )
                     }
                 }
@@ -331,6 +349,8 @@ class DictionaryLocalStore(context: Context) {
                     reading TEXT NOT NULL,
                     glosses TEXT NOT NULL,
                     score INTEGER NOT NULL DEFAULT 0,
+                    def_tags TEXT NOT NULL DEFAULT '',
+                    rule_tags TEXT NOT NULL DEFAULT '',
                     FOREIGN KEY(dictionary_id) REFERENCES $TABLE_DICTIONARIES(id) ON DELETE CASCADE
                 )
                 """.trimIndent(),
@@ -340,12 +360,21 @@ class DictionaryLocalStore(context: Context) {
             db.execSQL("CREATE INDEX idx_terms_dict ON $TABLE_TERMS(dictionary_id)")
         }
 
-        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+        override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+            if (oldVersion < 2) {
+                db.execSQL(
+                    "ALTER TABLE $TABLE_TERMS ADD COLUMN def_tags TEXT NOT NULL DEFAULT ''",
+                )
+                db.execSQL(
+                    "ALTER TABLE $TABLE_TERMS ADD COLUMN rule_tags TEXT NOT NULL DEFAULT ''",
+                )
+            }
+        }
     }
 
     companion object {
         private const val DB_NAME = "natsu_dictionaries.db"
-        private const val DB_VERSION = 1
+        private const val DB_VERSION = 2
         private const val TABLE_DICTIONARIES = "dictionaries"
         private const val TABLE_TERMS = "terms"
         private const val COMMIT_EVERY_ROWS = 10_000
