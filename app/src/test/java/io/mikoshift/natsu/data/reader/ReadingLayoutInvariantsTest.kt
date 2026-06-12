@@ -37,7 +37,7 @@ class ReadingLayoutInvariantsTest {
                             ReadingBlock.Paragraph(listOf(TextSpan("First"))),
                             ReadingBlock.Heading(text = "Chapter", level = 1),
                             ReadingBlock.Paragraph(listOf(TextSpan("Second"))),
-                            ReadingBlock.Image(relativePath = "img.png", alt = null),
+                            ReadingBlock.Image(relativePath = "img.png", alt = "Cover"),
                             ReadingBlock.Paragraph(listOf(TextSpan(""))),
                         ),
                     ),
@@ -48,6 +48,7 @@ class ReadingLayoutInvariantsTest {
         assertReadingLayoutInvariants(layout)
         assertSearchOffsetsAreValid(layout, "ir")
         assertSearchOffsetsAreValid(layout, "Chapter")
+        assertSearchOffsetsAreValid(layout, "Cover")
     }
 
     @Test

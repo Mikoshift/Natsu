@@ -70,6 +70,11 @@ mark.natsu-search-highlight {
   padding: 0;
 }
 
+img.natsu-search-highlight-image {
+  outline: 3px solid rgba(255, 214, 0, 0.75);
+  outline-offset: 2px;
+}
+
 ruby rt {
   font-size: 0.55em;
   user-select: none;

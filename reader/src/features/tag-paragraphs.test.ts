@@ -15,6 +15,34 @@ describe("tagParagraphs", () => {
     expect(document.getElementById("second")?.getAttribute(PARAGRAPH_INDEX_ATTR)).toBe("1");
   });
 
+  it("tags standalone image blocks by alt text", () => {
+    document.body.innerHTML = `
+      <p id="first">本文</p>
+      <img id="cover" src="cover.png" alt="Cover"/>
+      <p id="second">続き</p>
+    `;
+
+    tagParagraphs(["本文", "Cover", "続き"]);
+
+    expect(document.getElementById("first")?.getAttribute(PARAGRAPH_INDEX_ATTR)).toBe("0");
+    expect(document.getElementById("cover")?.getAttribute(PARAGRAPH_INDEX_ATTR)).toBe("1");
+    expect(document.getElementById("second")?.getAttribute(PARAGRAPH_INDEX_ATTR)).toBe("2");
+  });
+
+  it("tags image-only paragraph blocks with empty expected text", () => {
+    document.body.innerHTML = `
+      <p id="first">本文</p>
+      <p id="image"><img src="cover.png"/></p>
+      <p id="second">続き</p>
+    `;
+
+    tagParagraphs(["本文", "", "続き"]);
+
+    expect(document.getElementById("first")?.getAttribute(PARAGRAPH_INDEX_ATTR)).toBe("0");
+    expect(document.getElementById("image")?.getAttribute(PARAGRAPH_INDEX_ATTR)).toBe("1");
+    expect(document.getElementById("second")?.getAttribute(PARAGRAPH_INDEX_ATTR)).toBe("2");
+  });
+
   it("tags leaf div blocks when no paragraph tags exist", () => {
     document.body.innerHTML = `<div id="block">カタカナ語</div>`;
 

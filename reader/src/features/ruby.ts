@@ -1,5 +1,5 @@
 import type { RubyToken } from "../types.js";
-import { layoutRangeForSpan } from "../text/layout-text.js";
+import { layoutRangeForSectionSpan } from "../text/section-layout.js";
 import { collectTextRoot } from "../text/walker.js";
 
 export function injectRuby(tokens: RubyToken[] | null | undefined): void {
@@ -21,7 +21,7 @@ function injectRubyAtLayoutSpan(root: Node, token: RubyToken): void {
     return;
   }
 
-  const range = layoutRangeForSpan(root, token.start, token.end);
+  const range = layoutRangeForSectionSpan(root, token.start, token.end);
   if (!range || isInsideExistingRuby(range.startContainer, root)) {
     return;
   }

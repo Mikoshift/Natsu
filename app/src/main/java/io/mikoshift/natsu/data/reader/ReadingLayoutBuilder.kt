@@ -6,6 +6,7 @@ import io.mikoshift.natsu.domain.model.reading.ReadingLayout
 import io.mikoshift.natsu.domain.model.reading.ReadingSection
 import io.mikoshift.natsu.domain.model.reading.SectionLayout
 import io.mikoshift.natsu.domain.model.reading.contributesLayoutParagraph
+import io.mikoshift.natsu.domain.model.reading.layoutParagraphText
 
 /**
  * Builds [ReadingLayout] from [ReadingBook] IR.
@@ -13,7 +14,7 @@ import io.mikoshift.natsu.domain.model.reading.contributesLayoutParagraph
  * Inclusion rules:
  * - [ReadingBlock.Paragraph]: included when joined span text is non-empty.
  * - [ReadingBlock.Heading]: included when text is not blank (rendered as a paragraph row).
- * - [ReadingBlock.Image]: skipped (not yet represented in layout).
+ * - [ReadingBlock.Image]: included using [ReadingBlock.Image.alt], or an empty row when alt is absent.
  *
  * [ReadingLayout.canonicalText] is built by appending each included block separated by `\n`.
  * [ReadingLayout.sectionBoundaries] records the paragraph index where each section after the first begins.
@@ -90,13 +91,7 @@ class ReadingLayoutBuilder {
         }
     }
 
-    private fun paragraphText(block: ReadingBlock): String? =
-        when (block) {
-            is ReadingBlock.Paragraph ->
-                block.spans.joinToString(separator = "") { it.text }
-            is ReadingBlock.Heading -> block.text
-            is ReadingBlock.Image -> null
-        }
+    private fun paragraphText(block: ReadingBlock): String? = block.layoutParagraphText()
 }
 
 /** Maps a [SectionLayout.canonicalText] offset to the containing paragraph index. */

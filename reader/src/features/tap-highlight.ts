@@ -28,8 +28,9 @@ export function flashTapRange(paragraph: HTMLElement, start: number, end: number
     return;
   }
 
-  for (let index = segments.length - 1; index >= 0; index -= 1) {
-    const segment = segments[index];
+  const textSegments = segments.filter((segment) => segment.kind === "text");
+  for (let index = textSegments.length - 1; index >= 0; index -= 1) {
+    const segment = textSegments[index];
     const localLength = segment.localEnd - segment.localStart;
     if (localLength <= 0) {
       continue;

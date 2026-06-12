@@ -46,7 +46,7 @@ object XhtmlToReadingBlocks {
                 if (text.isBlank()) emptyList()
                 else listOf(ReadingBlock.Heading(text = text, level = tag.removePrefix("h").toInt()))
             }
-            "p" -> paragraphBlock(element)?.let { listOf(it) } ?: emptyList()
+            "p" -> paragraphToBlocks(element)
             "img" -> imageBlock(element)?.let { listOf(it) } ?: emptyList()
             in BLOCK_CONTAINER_TAGS -> {
                 if (element.selectFirst(BLOCK_CONTAINER_TAGS.joinToString(",") { it }) != null ||
@@ -68,12 +68,38 @@ object XhtmlToReadingBlocks {
         }
     }
 
+    private fun paragraphToBlocks(element: Element): List<ReadingBlock> {
+        val blocks = mutableListOf<ReadingBlock>()
+        val spans = mutableListOf<TextSpan>()
+        element.childNodes().forEach { node ->
+            when (node) {
+                is Element -> if (node.tagName().equals("img", ignoreCase = true)) {
+                    flushParagraph(spans, blocks)
+                    imageBlock(node)?.let { blocks.add(it) }
+                } else {
+                    walkInline(node, spans)
+                }
+                is TextNode -> walkInline(node, spans)
+            }
+        }
+        flushParagraph(spans, blocks)
+        return blocks
+    }
+
     private fun paragraphBlock(element: Element): ReadingBlock.Paragraph? {
         val spans = mutableListOf<TextSpan>()
         element.childNodes().forEach { walkInline(it, spans) }
         val merged = mergeAdjacentPlainSpans(spans)
         if (merged.isEmpty()) return null
         return ReadingBlock.Paragraph(merged)
+    }
+
+    private fun flushParagraph(spans: MutableList<TextSpan>, blocks: MutableList<ReadingBlock>) {
+        val merged = mergeAdjacentPlainSpans(spans)
+        if (merged.isNotEmpty()) {
+            blocks.add(ReadingBlock.Paragraph(merged))
+        }
+        spans.clear()
     }
 
     private fun imageBlock(element: Element): ReadingBlock.Image? {

@@ -1,4 +1,4 @@
-import { layoutRangeAtOffset } from "./layout-text.js";
+import { layoutRangeAtSectionOffset } from "./section-layout.js";
 
 /** @deprecated Use layoutRangeAtOffset — kept for scroll/highlight call sites. */
 export function charOffsetInParagraph(paragraph: Node, range: Range): number {
@@ -10,7 +10,7 @@ export function charOffsetInParagraph(paragraph: Node, range: Range): number {
 
 /** Maps a section-local layout-text offset to a collapsed DOM range. */
 export function charOffsetToPoint(root: Node, targetOffset: number): Range | null {
-  return layoutRangeAtOffset(root, targetOffset);
+  return layoutRangeAtSectionOffset(root, targetOffset);
 }
 
 export { extractLayoutText, layoutOffsetAtRange, layoutRangeAtOffset } from "./layout-text.js";

@@ -1,6 +1,9 @@
 import type { SearchRange } from "../types.js";
-import { layoutSegmentsForRange, visibleToRawOffset } from "../text/layout-text.js";
+import { layoutSegmentsForSectionRange } from "../text/section-layout.js";
+import { visibleToRawOffset } from "../text/layout-text.js";
 import { collectTextRoot } from "../text/walker.js";
+
+const IMAGE_HIGHLIGHT_CLASS = "natsu-search-highlight-image";
 
 export function clearHighlights(): void {
   document.querySelectorAll("mark.natsu-search-highlight").forEach((mark) => {
@@ -14,12 +17,20 @@ export function clearHighlights(): void {
     parent.removeChild(mark);
     parent.normalize();
   });
+  document.querySelectorAll(`img.${IMAGE_HIGHLIGHT_CLASS}`).forEach((image) => {
+    image.classList.remove(IMAGE_HIGHLIGHT_CLASS);
+  });
 }
 
 function highlightRange(root: Node, start: number, end: number): void {
-  const segments = layoutSegmentsForRange(root, start, end);
+  const segments = layoutSegmentsForSectionRange(root, start, end);
   for (let i = segments.length - 1; i >= 0; i -= 1) {
     const seg = segments[i];
+    if (seg.kind === "image") {
+      seg.element.classList.add(IMAGE_HIGHLIGHT_CLASS);
+      continue;
+    }
+
     const localLength = seg.localEnd - seg.localStart;
     if (localLength <= 0) {
       continue;

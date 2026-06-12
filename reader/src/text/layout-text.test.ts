@@ -1,7 +1,26 @@
 import { describe, expect, it } from "vitest";
-import { extractLayoutText, layoutOffsetAtRange, layoutRangeForSpan } from "./layout-text.js";
+import {
+  extractLayoutText,
+  layoutOffsetAtRange,
+  layoutRangeAtOffset,
+  layoutRangeForSpan,
+} from "./layout-text.js";
 
 describe("extractLayoutText", () => {
+  it("includes img alt text", () => {
+    document.body.innerHTML = '<img id="cover" src="cover.png" alt="Cover"/>';
+    const image = document.getElementById("cover")!;
+
+    expect(extractLayoutText(image)).toBe("Cover");
+  });
+
+  it("returns empty string for img without alt", () => {
+    document.body.innerHTML = '<img id="cover" src="cover.png"/>';
+    const image = document.getElementById("cover")!;
+
+    expect(extractLayoutText(image)).toBe("");
+  });
+
   it("skips rt readings and preserves br newlines", () => {
     document.body.innerHTML =
       '<p id="p">上<ruby><rb>手</rb><rt>じょうず</rt></ruby>に<br>なった</p>';
@@ -33,6 +52,17 @@ describe("layoutOffsetAtRange", () => {
     range.collapse(true);
 
     expect(layoutOffsetAtRange(paragraph, range)).toBe(2);
+  });
+});
+
+describe("layoutRangeAtOffset", () => {
+  it("maps offset inside img alt to the image element", () => {
+    document.body.innerHTML = '<img id="cover" src="cover.png" alt="Cover"/>';
+    const image = document.getElementById("cover")!;
+
+    const range = layoutRangeAtOffset(image, 2);
+    expect(range).not.toBeNull();
+    expect(range!.startContainer).toBe(image);
   });
 });
 

@@ -240,6 +240,10 @@
         found = true;
         return;
       }
+      if ((meta == null ? void 0 : meta.kind) === "image" && targetNode === meta.element) {
+        found = true;
+        return;
+      }
       offset += chunk.length;
     });
     return found ? offset : null;
@@ -260,7 +264,17 @@
           range.setStart(meta.node, rawOffset);
           range.collapse(true);
           result = range;
+        } else if ((meta == null ? void 0 : meta.kind) === "image") {
+          const range = document.createRange();
+          range.setStart(meta.element, 0);
+          range.collapse(true);
+          result = range;
         }
+      } else if ((meta == null ? void 0 : meta.kind) === "image" && chunk.length === 0 && targetOffset === start) {
+        const range = document.createRange();
+        range.setStart(meta.element, 0);
+        range.collapse(true);
+        result = range;
       }
       current = end;
     });
@@ -275,28 +289,26 @@
     walkLayout(root, root, (chunk, meta) => {
       const chunkStart = current;
       const chunkEnd = current + chunk.length;
-      if ((meta == null ? void 0 : meta.kind) === "text" && end > chunkStart && start < chunkEnd) {
-        segments.push({
-          node: meta.node,
-          localStart: Math.max(0, start - chunkStart),
-          localEnd: Math.min(chunk.length, end - chunkStart)
-        });
+      if (end > chunkStart && start < chunkEnd) {
+        if ((meta == null ? void 0 : meta.kind) === "text") {
+          segments.push({
+            kind: "text",
+            node: meta.node,
+            localStart: Math.max(0, start - chunkStart),
+            localEnd: Math.min(chunk.length, end - chunkStart)
+          });
+        } else if ((meta == null ? void 0 : meta.kind) === "image") {
+          segments.push({
+            kind: "image",
+            element: meta.element,
+            localStart: Math.max(0, start - chunkStart),
+            localEnd: Math.min(chunk.length, end - chunkStart)
+          });
+        }
       }
       current = chunkEnd;
     });
     return segments;
-  }
-  function layoutRangeForSpan(root, start, end) {
-    const segments = layoutSegmentsForRange(root, start, end);
-    if (segments.length === 0) {
-      return null;
-    }
-    const first = segments[0];
-    const last = segments[segments.length - 1];
-    const range = document.createRange();
-    range.setStart(first.node, rawOffsetForVisibleIndex(first.node, first.localStart));
-    range.setEnd(last.node, rawOffsetForVisibleIndex(last.node, last.localEnd));
-    return range;
   }
   function walkLayout(node, root, emit) {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -312,12 +324,18 @@
     if (node.nodeType !== Node.ELEMENT_NODE) {
       return;
     }
-    const tag = node.tagName.toUpperCase();
+    const element = node;
+    const tag = element.tagName.toUpperCase();
     if (SKIP_TAGS2.has(tag)) {
       return;
     }
     if (tag === "BR") {
       emit("\n", { kind: "newline" });
+      return;
+    }
+    if (tag === "IMG") {
+      const alt = element.alt || "";
+      emit(alt, { kind: "image", element });
       return;
     }
     for (const child of node.childNodes) {
@@ -600,7 +618,164 @@
     window.addEventListener("scroll", notifyScrollProgress, { passive: true });
   }
 
+  // reader/src/features/tag-paragraphs.ts
+  var PREFERRED_BLOCK_TAGS2 = /* @__PURE__ */ new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
+  var NESTED_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, td, blockquote, div, img";
+  function tagParagraphs(expectedTexts) {
+    if (!(expectedTexts == null ? void 0 : expectedTexts.length)) {
+      return;
+    }
+    const root = collectTextRoot();
+    const blocks = collectLayoutBlocks(root);
+    let cursor = 0;
+    blocks.forEach((block) => {
+      if (block.hasAttribute(PARAGRAPH_INDEX_ATTR)) {
+        return;
+      }
+      const text = extractLayoutText(block);
+      const matchedIndex = matchParagraphIndex(text, expectedTexts, cursor);
+      if (matchedIndex >= 0) {
+        block.setAttribute(PARAGRAPH_INDEX_ATTR, String(matchedIndex));
+        cursor = matchedIndex + 1;
+      }
+    });
+  }
+  function matchParagraphIndex(text, expectedTexts, cursor) {
+    if (cursor < expectedTexts.length && textsMatch(text, expectedTexts[cursor])) {
+      return cursor;
+    }
+    return expectedTexts.findIndex((expected, index) => index >= cursor && textsMatch(text, expected));
+  }
+  function collectLayoutBlocks(root) {
+    const blocks = [];
+    collectBlocksFrom(root, blocks);
+    return blocks;
+  }
+  function collectBlocksFrom(container, blocks) {
+    container.childNodes.forEach((child) => {
+      if (child.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+      const element = child;
+      const tag = element.tagName.toUpperCase();
+      if (tag === "IMG") {
+        blocks.push(element);
+        return;
+      }
+      if (PREFERRED_BLOCK_TAGS2.has(tag)) {
+        if (isLayoutBlock(element)) {
+          blocks.push(element);
+        }
+        return;
+      }
+      if (tag === "DIV" || tag === "FIGURE") {
+        if (hasNestedLayoutBlock(element)) {
+          collectBlocksFrom(element, blocks);
+        } else if (isLayoutBlock(element)) {
+          blocks.push(element);
+        }
+        return;
+      }
+      if (hasNestedLayoutBlock(element)) {
+        collectBlocksFrom(element, blocks);
+      }
+    });
+  }
+  function isLayoutBlock(element) {
+    if (element.tagName.toUpperCase() === "IMG") {
+      return true;
+    }
+    if (extractLayoutText(element).trim()) {
+      return true;
+    }
+    return isImageOnlyBlock(element);
+  }
+  function isImageOnlyBlock(element) {
+    return element.querySelector("img") !== null && !extractLayoutText(element).trim();
+  }
+  function hasNestedLayoutBlock(element) {
+    return element.querySelector(NESTED_BLOCK_SELECTOR) !== null;
+  }
+  function textsMatch(actual, expected) {
+    if (actual === expected) {
+      return true;
+    }
+    return normalizeLayoutText(actual) === normalizeLayoutText(expected);
+  }
+  function normalizeLayoutText(text) {
+    return text.replace(/\s+/g, " ").trim();
+  }
+
+  // reader/src/text/section-layout.ts
+  function sectionChunks(root) {
+    const blocks = collectLayoutBlocks(root);
+    const chunks = [];
+    let current = 0;
+    blocks.forEach((block, index) => {
+      const text = extractLayoutText(block);
+      chunks.push({ block, start: current, end: current + text.length });
+      current += text.length;
+      if (index < blocks.length - 1) {
+        current += 1;
+      }
+    });
+    return chunks;
+  }
+  function layoutRangeAtSectionOffset(root, targetOffset) {
+    const chunks = sectionChunks(root);
+    for (let index = 0; index < chunks.length; index += 1) {
+      const { block, start, end } = chunks[index];
+      if (targetOffset >= start && targetOffset <= end) {
+        const localOffset = Math.min(Math.max(0, targetOffset - start), Math.max(0, end - start));
+        const range = layoutRangeAtOffset(block, localOffset);
+        if (range) {
+          return range;
+        }
+      }
+      if (index < chunks.length - 1 && targetOffset === end + 1) {
+        const nextRange = layoutRangeAtOffset(chunks[index + 1].block, 0);
+        if (nextRange) {
+          return nextRange;
+        }
+      }
+    }
+    return null;
+  }
+  function layoutSegmentsForSectionRange(root, start, end) {
+    if (start >= end) {
+      return [];
+    }
+    const segments = [];
+    sectionChunks(root).forEach(({ block, start: blockStart, end: blockEnd }) => {
+      const overlapStart = Math.max(start, blockStart);
+      const overlapEnd = Math.min(end, blockEnd);
+      if (overlapStart >= overlapEnd) {
+        return;
+      }
+      const localStart = overlapStart - blockStart;
+      const localEnd = overlapEnd - blockStart;
+      segments.push(...layoutSegmentsForRange(block, localStart, localEnd));
+    });
+    return segments;
+  }
+  function layoutRangeForSectionSpan(root, start, end) {
+    const segments = layoutSegmentsForSectionRange(root, start, end);
+    const textSegments = segments.filter(
+      (segment) => segment.kind === "text"
+    );
+    if (textSegments.length === 0) {
+      return null;
+    }
+    const first = textSegments[0];
+    const last = textSegments[textSegments.length - 1];
+    const range = document.createRange();
+    range.setStart(first.node, visibleToRawOffset(first.node, first.localStart));
+    range.setEnd(last.node, visibleToRawOffset(last.node, last.localEnd));
+    return range;
+  }
+
   // reader/src/features/highlight.ts
+  var IMAGE_HIGHLIGHT_CLASS = "natsu-search-highlight-image";
   function clearHighlights() {
     document.querySelectorAll("mark.natsu-search-highlight").forEach((mark) => {
       const parent = mark.parentNode;
@@ -613,12 +788,19 @@
       parent.removeChild(mark);
       parent.normalize();
     });
+    document.querySelectorAll("img.".concat(IMAGE_HIGHLIGHT_CLASS)).forEach((image) => {
+      image.classList.remove(IMAGE_HIGHLIGHT_CLASS);
+    });
   }
   function highlightRange(root, start, end) {
     var _a;
-    const segments = layoutSegmentsForRange(root, start, end);
+    const segments = layoutSegmentsForSectionRange(root, start, end);
     for (let i = segments.length - 1; i >= 0; i -= 1) {
       const seg = segments[i];
+      if (seg.kind === "image") {
+        seg.element.classList.add(IMAGE_HIGHLIGHT_CLASS);
+        continue;
+      }
       const localLength = seg.localEnd - seg.localStart;
       if (localLength <= 0) {
         continue;
@@ -677,8 +859,9 @@
     if (segments.length === 0) {
       return;
     }
-    for (let index = segments.length - 1; index >= 0; index -= 1) {
-      const segment = segments[index];
+    const textSegments = segments.filter((segment) => segment.kind === "text");
+    for (let index = textSegments.length - 1; index >= 0; index -= 1) {
+      const segment = textSegments[index];
       const localLength = segment.localEnd - segment.localStart;
       if (localLength <= 0) {
         continue;
@@ -740,7 +923,7 @@
     if (document.querySelector('ruby[data-natsu-layout-start="'.concat(token.start, '"]'))) {
       return;
     }
-    const range = layoutRangeForSpan(root, token.start, token.end);
+    const range = layoutRangeForSectionSpan(root, token.start, token.end);
     if (!range || isInsideExistingRuby(range.startContainer, root)) {
       return;
     }
@@ -772,7 +955,7 @@
 
   // reader/src/text/offset.ts
   function charOffsetToPoint(root, targetOffset) {
-    return layoutRangeAtOffset(root, targetOffset);
+    return layoutRangeAtSectionOffset(root, targetOffset);
   }
 
   // reader/src/features/scroll.ts
@@ -785,81 +968,6 @@
     const rect = range.getBoundingClientRect();
     const targetTop = window.scrollY + rect.top - window.innerHeight * 0.3;
     window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
-  }
-
-  // reader/src/features/tag-paragraphs.ts
-  var PREFERRED_BLOCK_TAGS2 = /* @__PURE__ */ new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
-  var NESTED_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, td, blockquote, div";
-  function tagParagraphs(expectedTexts) {
-    if (!(expectedTexts == null ? void 0 : expectedTexts.length)) {
-      return;
-    }
-    const root = collectTextRoot();
-    const blocks = collectLayoutBlocks(root);
-    let cursor = 0;
-    blocks.forEach((block) => {
-      if (block.hasAttribute(PARAGRAPH_INDEX_ATTR)) {
-        return;
-      }
-      const text = extractLayoutText(block);
-      if (!text.trim()) {
-        return;
-      }
-      const matchedIndex = matchParagraphIndex(text, expectedTexts, cursor);
-      if (matchedIndex >= 0) {
-        block.setAttribute(PARAGRAPH_INDEX_ATTR, String(matchedIndex));
-        cursor = matchedIndex + 1;
-      }
-    });
-  }
-  function matchParagraphIndex(text, expectedTexts, cursor) {
-    if (cursor < expectedTexts.length && textsMatch(text, expectedTexts[cursor])) {
-      return cursor;
-    }
-    return expectedTexts.findIndex((expected, index) => index >= cursor && textsMatch(text, expected));
-  }
-  function collectLayoutBlocks(root) {
-    const blocks = [];
-    collectBlocksFrom(root, blocks);
-    return blocks;
-  }
-  function collectBlocksFrom(container, blocks) {
-    container.childNodes.forEach((child) => {
-      if (child.nodeType !== Node.ELEMENT_NODE) {
-        return;
-      }
-      const element = child;
-      const tag = element.tagName.toUpperCase();
-      if (PREFERRED_BLOCK_TAGS2.has(tag)) {
-        if (extractLayoutText(element).trim()) {
-          blocks.push(element);
-        }
-        return;
-      }
-      if (tag === "DIV") {
-        if (hasNestedLayoutBlock(element)) {
-          collectBlocksFrom(element, blocks);
-        } else if (extractLayoutText(element).trim()) {
-          blocks.push(element);
-        }
-        return;
-      }
-      if (hasNestedLayoutBlock(element)) {
-        collectBlocksFrom(element, blocks);
-      }
-    });
-  }
-  function hasNestedLayoutBlock(element) {
-    return element.querySelector(NESTED_BLOCK_SELECTOR) !== null;
-  }
-  function textsMatch(actual, expected) {
-    if (actual === expected) {
-      return true;
-    }
-    return normalizeLayoutText(actual) === normalizeLayoutText(expected);
-  }
-  function normalizeLayoutText(text) {
-    return text.replace(/\s+/g, " ").trim();
   }
 
   // reader/src/messages.ts
