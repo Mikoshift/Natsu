@@ -1,10 +1,10 @@
 "use strict";
 (() => {
-  // reader-js/src/types.ts
+  // reader/src/types.ts
   var WEB_MESSAGE_TYPE = "natsu-reader-call";
   var BRIDGE_NAME = "NatsuBridge";
 
-  // reader-js/src/native-bridge.ts
+  // reader/src/native-bridge.ts
   function bridge() {
     return window[BRIDGE_NAME];
   }
@@ -15,7 +15,7 @@
     }
   }
 
-  // reader-js/src/text/walker.ts
+  // reader/src/text/walker.ts
   function collectTextRoot() {
     return document.body || document.documentElement;
   }
@@ -52,7 +52,7 @@
     });
   }
 
-  // reader-js/src/text/offset.ts
+  // reader/src/text/offset.ts
   function charOffsetInParagraph(paragraph, range) {
     const pre = document.createRange();
     pre.selectNodeContents(paragraph);
@@ -99,7 +99,7 @@
     return null;
   }
 
-  // reader-js/src/text/range-from-point.ts
+  // reader/src/text/range-from-point.ts
   function findTextNodeInElement(element) {
     const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
     const node = walker.nextNode();
@@ -160,7 +160,7 @@
     };
   }
 
-  // reader-js/src/events.ts
+  // reader/src/events.ts
   var SCROLL_THROTTLE_MS = 400;
   var TAP_MOVE_THRESHOLD_PX = 10;
   var TAP_CLICK_SUPPRESS_MS = 400;
@@ -232,7 +232,7 @@
     window.addEventListener("scroll", notifyScrollProgress, { passive: true });
   }
 
-  // reader-js/src/features/highlight.ts
+  // reader/src/features/highlight.ts
   function clearHighlights() {
     document.querySelectorAll("mark.natsu-search-highlight").forEach((mark) => {
       const parent = mark.parentNode;
@@ -305,7 +305,7 @@
     });
   }
 
-  // reader-js/src/features/ruby.ts
+  // reader/src/features/ruby.ts
   function injectRuby(tokens) {
     if (!(tokens == null ? void 0 : tokens.length)) {
       return;
@@ -353,7 +353,7 @@
     });
   }
 
-  // reader-js/src/features/scroll.ts
+  // reader/src/features/scroll.ts
   function scrollToOffset(charOffset) {
     const root = collectTextRoot();
     const range = charOffsetToPoint(root, charOffset);
@@ -365,7 +365,7 @@
     window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
   }
 
-  // reader-js/src/messages.ts
+  // reader/src/messages.ts
   function installMessageListener(api) {
     window.addEventListener("message", (event) => {
       let payload = event.data;
@@ -395,7 +395,7 @@
     }
   }
 
-  // reader-js/src/theme.ts
+  // reader/src/theme.ts
   function applyTheme(vars) {
     if (!vars) {
       return;
@@ -426,7 +426,7 @@
     }
   }
 
-  // reader-js/src/index.ts
+  // reader/src/index.ts
   (function() {
     "use strict";
     const reader = {

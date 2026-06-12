@@ -1,0 +1,47 @@
+# Normalize line endings
+* text=auto eol=lf
+
+# Windows scripts
+*.{cmd,[Cc][Mm][Dd]} text eol=crlf
+*.{bat,[Bb][Aa][Tt]} text eol=crlf
+
+# Source
+*.kt text diff=kotlin
+*.kts text diff=kotlin
+*.java text diff=java
+*.gradle text
+*.properties text
+*.ts text
+*.js text
+*.json text
+*.css text
+*.html text
+*.xml text
+*.md text
+*.svg text
+
+# Shell
+*.sh text eol=lf
+gradlew text eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.epub binary
+*.jar binary
+*.apk binary
+*.aab binary
+*.jks binary
+*.keystore binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+
+# Gradle Kotlin DSL
+*.gradle.kts linguist-language=Kotlin

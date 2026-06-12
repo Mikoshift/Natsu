@@ -3,8 +3,8 @@ import { copyFileSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const readerJsDir = dirname(fileURLToPath(import.meta.url));
-const outDir = join(readerJsDir, "../app/src/main/assets/reader");
+const readerDir = dirname(fileURLToPath(import.meta.url));
+const outDir = join(readerDir, "../app/src/main/assets/reader");
 
 const common = {
   bundle: true,
@@ -18,8 +18,8 @@ const bridgeOut = join(outDir, "bridge.js");
 mkdirSync(dirname(bridgeOut), { recursive: true });
 await esbuild.build({
   ...common,
-  entryPoints: [join(readerJsDir, "src/index.ts")],
+  entryPoints: [join(readerDir, "src/index.ts")],
   outfile: bridgeOut,
 });
 
-copyFileSync(join(readerJsDir, "theme.css"), join(outDir, "theme.css"));
+copyFileSync(join(readerDir, "theme.css"), join(outDir, "theme.css"));

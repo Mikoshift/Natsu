@@ -8,7 +8,7 @@ export default tseslint.config(
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
-    files: ["reader-js/src/**/*.ts"],
+    files: ["reader/src/**/*.ts"],
     rules: {
       "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "error",
@@ -20,8 +20,8 @@ export default tseslint.config(
   },
   {
     files: [
-      "reader-js/**/*.config.{js,mjs}",
-      "reader-js/vitest.config.mjs",
+      "reader/**/*.config.{js,mjs}",
+      "reader/vitest.config.mjs",
       "eslint.config.js",
     ],
     languageOptions: {
