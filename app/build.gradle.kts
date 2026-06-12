@@ -1,6 +1,9 @@
+import org.gradle.testing.jacoco.tasks.JacocoReport
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    jacoco
 }
 
 android {
@@ -20,6 +23,9 @@ android {
     }
 
     buildTypes {
+        debug {
+            enableUnitTestCoverage = true
+        }
         release {
             optimization {
                 enable = false
@@ -79,6 +85,52 @@ val compileReaderJs = tasks.register<Exec>("compileReaderJs") {
 
 tasks.named("preBuild").configure {
     dependsOn(compileReaderJs)
+}
+
+val jacocoClassExcludes = listOf(
+    "**/R.class",
+    "**/R\$*.class",
+    "**/BuildConfig.*",
+    "**/Manifest*.*",
+    "**/*\$Companion.class",
+    "**/*Test*.*",
+    "android/**/*.*",
+    "**/databinding/**",
+)
+
+tasks.register<JacocoReport>("jacocoTestReport") {
+    group = "verification"
+    description = "Generate JaCoCo coverage report for debug unit tests"
+    dependsOn("testDebugUnitTest")
+
+    reports {
+        xml.required.set(true)
+        html.required.set(true)
+        html.outputLocation.set(layout.buildDirectory.dir("reports/jacoco/jacocoTestReport"))
+    }
+
+    // AGP 9+ compiles Kotlin to built_in_kotlinc; older AGP used tmp/kotlin-classes.
+    val classDirs = listOf(
+        layout.buildDirectory.dir("intermediates/built_in_kotlinc/debug/compileDebugKotlin/classes"),
+        layout.buildDirectory.dir("tmp/kotlin-classes/debug"),
+        layout.buildDirectory.dir("intermediates/javac/debug/compileDebugJavaWithJavac/classes"),
+        layout.buildDirectory.dir("intermediates/javac/debug/classes"),
+    ).map { dir ->
+        fileTree(dir) { exclude(jacocoClassExcludes) }
+    }
+
+    classDirectories.setFrom(files(classDirs))
+    sourceDirectories.setFrom(
+        files("src/main/java", "src/main/kotlin"),
+    )
+    executionData.setFrom(
+        fileTree(layout.buildDirectory) {
+            include(
+                "outputs/unit_test_code_coverage/debugUnitTest/testDebugUnitTest.exec",
+                "jacoco/testDebugUnitTest.exec",
+            )
+        },
+    )
 }
 
 dependencies {

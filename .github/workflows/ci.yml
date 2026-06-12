@@ -50,5 +50,5 @@ jobs:
 
       - uses: android-actions/setup-android@v4
 
-      - name: Unit tests and debug build
-        run: ./gradlew testDebugUnitTest assembleDebug --no-daemon
+      - name: Unit tests, coverage, and debug build
+        run: ./gradlew testDebugUnitTest jacocoTestReport assembleDebug --no-daemon
