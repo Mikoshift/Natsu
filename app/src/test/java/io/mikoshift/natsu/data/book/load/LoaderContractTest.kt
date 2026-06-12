@@ -2,8 +2,11 @@ package io.mikoshift.natsu.data.book.load
 
 import io.mikoshift.natsu.data.book.BookStorage
 import io.mikoshift.natsu.domain.model.reading.BookFormat
+import io.mikoshift.natsu.domain.model.reading.ReadingBlock
+import io.mikoshift.natsu.domain.model.reading.TextSpan
 import kotlinx.coroutines.runBlocking
 import java.nio.charset.StandardCharsets
+import org.junit.Assert.assertEquals
 import org.junit.Test
 import java.io.File
 
@@ -114,6 +117,65 @@ class LoaderContractTest {
             book = book,
             searchQueries = listOf("Chapter", "猫"),
         )
+    }
+
+    @Test
+    fun epubLoader_satisfiesContract_withRubyHeadingAndImage() = runBlocking {
+        val booksRoot = createBooksRoot()
+        val sections = listOf(
+            LoaderTestSection(
+                id = "spine-0",
+                title = "Chapter",
+                path = "OEBPS/chapter.xhtml",
+                content = """
+                <?xml version="1.0" encoding="utf-8"?>
+                <html xmlns="http://www.w3.org/1999/xhtml">
+                <body>
+                  <h1>第一章</h1>
+                  <p><ruby>漢字<rt>かんじ</rt></ruby>です。</p>
+                  <img src="images/cover.png" alt="Cover"/>
+                </body>
+                </html>
+                """.trimIndent(),
+            ),
+        )
+        val bookDir = LoaderTestBooks.createEpubPackage(
+            booksRoot = booksRoot,
+            sections = sections,
+        )
+        File(bookDir, "OEBPS/images/cover.png").apply {
+            parentFile?.mkdirs()
+            writeText("png", StandardCharsets.UTF_8)
+        }
+        val book = ManifestReadingContentLoader(
+            bookStorage = BookStorage(booksRoot),
+            formatLoaders = listOf(EpubFormatLoader()),
+        ).load(
+            documentId = "book-1",
+            storagePath = bookDir.absolutePath,
+            title = "Test Book",
+        ).getOrThrow()
+
+        LoaderContract.verify(
+            book = book,
+            searchQueries = listOf("第一章", "漢字", "です"),
+        )
+
+        val section = book.sections.single()
+        val paragraph = section.blocks
+            .filterIsInstance<ReadingBlock.Paragraph>()
+            .single { block ->
+                block.spans.any { it.reading == "かんじ" }
+            }
+        assertEquals(
+            listOf(
+                TextSpan(text = "漢字", reading = "かんじ"),
+                TextSpan(text = "です。"),
+            ),
+            paragraph.spans,
+        )
+        val image = section.blocks.filterIsInstance<ReadingBlock.Image>().single()
+        assertEquals("OEBPS/images/cover.png", image.relativePath)
     }
 
     private fun createBooksRoot(): File {

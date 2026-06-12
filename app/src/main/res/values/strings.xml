@@ -3,13 +3,15 @@
     <string name="library_title">Library</string>
     <string name="import_text">Import book</string>
     <string name="library_empty_title">No books</string>
-    <string name="library_empty_message">Tap + to import a .txt or .md file (UTF-8, Shift-JIS, or EUC-JP)</string>
+    <string name="library_empty_message">Tap + to import a .epub, .txt, or .md file (UTF-8, Shift-JIS, or EUC-JP)</string>
     <string name="import_error_cannot_open">Could not open the selected file</string>
     <string name="import_error_empty">The selected file is empty</string>
     <string name="import_error_unsupported_encoding">Unsupported text encoding. Use UTF-8, Shift-JIS, or EUC-JP.</string>
     <string name="import_error_unsupported_format">This file format is not supported</string>
     <string name="import_error_file_too_large">File is too large (maximum 50 MB)</string>
     <string name="import_error_generic">Import failed</string>
+    <string name="import_error_unsupported_epub">This EPUB format is not supported</string>
+    <string name="import_error_corrupt_epub">The EPUB file is corrupt or cannot be read</string>
     <string name="reader_title">Reader</string>
     <string name="reader_sections">Sections</string>
     <string name="reader_search">Search in text</string>

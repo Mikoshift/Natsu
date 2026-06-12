@@ -20,13 +20,18 @@ internal object TextImportSupport {
         return "Untitled"
     }
 
-    fun readText(context: Context, uri: Uri): String {
+    fun readBytes(context: Context, uri: Uri): ByteArray {
         val bytes = context.contentResolver.openInputStream(uri)?.use { input ->
             readBytesWithLimit(input, MAX_IMPORT_BYTES)
         } ?: throw CannotOpenFileException()
         if (bytes.isEmpty()) {
             throw EmptyFileException()
         }
+        return bytes
+    }
+
+    fun readText(context: Context, uri: Uri): String {
+        val bytes = readBytes(context, uri)
         return TextCharsetDecoder.decode(bytes).text
     }
 

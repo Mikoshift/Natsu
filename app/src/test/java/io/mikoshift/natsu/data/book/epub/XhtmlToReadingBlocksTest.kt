@@ -1,4 +1,4 @@
-package io.mikoshift.natsu.data.book.epub.spike
+package io.mikoshift.natsu.data.book.epub
 
 import io.mikoshift.natsu.domain.model.reading.ReadingBlock
 import io.mikoshift.natsu.domain.model.reading.TextSpan

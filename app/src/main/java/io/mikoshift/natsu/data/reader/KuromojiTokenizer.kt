@@ -3,6 +3,7 @@ package io.mikoshift.natsu.data.reader
 import com.atilika.kuromoji.ipadic.Token
 import com.atilika.kuromoji.ipadic.Tokenizer
 import io.mikoshift.natsu.domain.model.TextToken
+import io.mikoshift.natsu.domain.model.reading.TextSpan
 import io.mikoshift.natsu.domain.repository.TextTokenizer
 
 class KuromojiTokenizer : TextTokenizer {
@@ -12,6 +13,9 @@ class KuromojiTokenizer : TextTokenizer {
         if (text.isEmpty()) return emptyList()
         return tokenizer.tokenize(text).map { it.toTextToken() }
     }
+
+    override fun tokenizeParagraph(spans: List<TextSpan>): List<TextToken> =
+        SpanAwareTokenizer.tokenizeParagraph(spans, ::tokenize)
 
     override fun tokenizeParagraphs(paragraphs: List<String>): List<List<TextToken>> =
         paragraphs.map { tokenize(it) }

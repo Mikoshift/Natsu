@@ -79,6 +79,7 @@ object LoaderTestBooks {
         val formatLoaders = when (format) {
             BookFormat.PlainText -> listOf(PlainTextFormatLoader())
             BookFormat.Markdown -> listOf(MarkdownFormatLoader())
+            BookFormat.Epub -> listOf(EpubFormatLoader())
         }
         val loader = ManifestReadingContentLoader(
             bookStorage = BookStorage(booksRoot),
@@ -90,6 +91,32 @@ object LoaderTestBooks {
             title = title,
         ).getOrThrow()
     }
+
+    fun createEpubPackage(
+        booksRoot: File,
+        bookId: String = "book-1",
+        title: String = "Test Book",
+        sections: List<LoaderTestSection>,
+    ): File = createBookPackage(
+        booksRoot = booksRoot,
+        format = BookFormat.Epub,
+        bookId = bookId,
+        title = title,
+        sections = sections,
+    )
+
+    suspend fun loadEpubBook(
+        booksRoot: File,
+        bookId: String = "book-1",
+        title: String = "Test Book",
+        sections: List<LoaderTestSection>,
+    ): ReadingBook = loadBook(
+        booksRoot = booksRoot,
+        format = BookFormat.Epub,
+        bookId = bookId,
+        title = title,
+        sections = sections,
+    )
 
     suspend fun loadPlainTextBook(
         booksRoot: File,

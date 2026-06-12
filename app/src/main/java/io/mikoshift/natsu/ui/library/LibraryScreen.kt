@@ -56,8 +56,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import io.mikoshift.natsu.R
 import io.mikoshift.natsu.data.book.import.BookImportException
 import io.mikoshift.natsu.data.book.import.CannotOpenFileException
+import io.mikoshift.natsu.data.book.import.CorruptEpubException
 import io.mikoshift.natsu.data.book.import.EmptyFileException
 import io.mikoshift.natsu.data.book.import.FileTooLargeException
+import io.mikoshift.natsu.data.book.import.UnsupportedEpubException
 import io.mikoshift.natsu.data.book.import.UnsupportedFormatException
 import io.mikoshift.natsu.data.book.import.UnsupportedTextEncodingException
 import io.mikoshift.natsu.domain.model.Document
@@ -124,7 +126,16 @@ fun LibraryScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { importLauncher.launch(arrayOf("text/plain", "text/*", "*/*")) },
+                onClick = {
+                    importLauncher.launch(
+                        arrayOf(
+                            "application/epub+zip",
+                            "text/plain",
+                            "text/*",
+                            "*/*",
+                        ),
+                    )
+                },
             ) {
                 Icon(Icons.Default.Add, contentDescription = stringResource(R.string.import_text))
             }
@@ -330,6 +341,8 @@ private fun resolveLibraryErrorMessage(context: Context, error: Throwable): Stri
         is UnsupportedTextEncodingException -> context.getString(R.string.import_error_unsupported_encoding)
         is UnsupportedFormatException -> context.getString(R.string.import_error_unsupported_format)
         is FileTooLargeException -> context.getString(R.string.import_error_file_too_large)
+        is UnsupportedEpubException -> context.getString(R.string.import_error_unsupported_epub)
+        is CorruptEpubException -> context.getString(R.string.import_error_corrupt_epub)
         else -> context.getString(R.string.import_error_generic)
     }
 }

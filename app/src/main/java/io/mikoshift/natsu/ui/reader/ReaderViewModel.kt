@@ -12,9 +12,12 @@ import io.mikoshift.natsu.domain.model.DictionaryEntry
 import io.mikoshift.natsu.domain.model.Document
 import io.mikoshift.natsu.domain.model.ReaderSettings
 import io.mikoshift.natsu.domain.model.TextToken
+import io.mikoshift.natsu.domain.model.reading.ReadingBlock
 import io.mikoshift.natsu.domain.model.reading.ReadingBookOutline
+import io.mikoshift.natsu.domain.model.reading.ReadingSection
 import io.mikoshift.natsu.domain.model.reading.ReadingLocator
 import io.mikoshift.natsu.domain.model.reading.SearchIndex
+import io.mikoshift.natsu.domain.model.reading.contributesLayoutParagraph
 import io.mikoshift.natsu.domain.model.reading.SearchMatch
 import io.mikoshift.natsu.domain.model.reading.SectionReadingContent
 import io.mikoshift.natsu.domain.repository.DictionaryRepository
@@ -393,12 +396,24 @@ class ReaderViewModel(
         }
     }
 
+    private fun tokenizeSectionBlocks(section: ReadingSection): List<List<TextToken>> {
+        return section.blocks
+            .filter { it.contributesLayoutParagraph() }
+            .map { block ->
+                when (block) {
+                    is ReadingBlock.Paragraph -> textTokenizer.tokenizeParagraph(block.spans)
+                    is ReadingBlock.Heading -> textTokenizer.tokenize(block.text)
+                    is ReadingBlock.Image -> emptyList()
+                }
+            }
+    }
+
     private suspend fun ensureSectionLoaded(documentId: String, sectionId: String): Boolean {
         if (loadedSections.containsKey(sectionId)) return true
         val sectionContent = readingContentRepository.loadSection(documentId, sectionId).getOrNull()
             ?: return false
         val tokenized = withContext(Dispatchers.Default) {
-            textTokenizer.tokenizeParagraphs(sectionContent.layout.paragraphs)
+            tokenizeSectionBlocks(sectionContent.section)
         }
         val globalOffset = outline?.searchIndex?.layoutParagraphStart(sectionId) ?: 0
         val items = ReaderDisplayBuilder.buildSectionItems(

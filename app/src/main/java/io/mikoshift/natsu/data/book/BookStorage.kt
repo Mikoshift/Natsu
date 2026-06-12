@@ -9,9 +9,11 @@ import io.mikoshift.natsu.domain.model.reading.ManifestSection
 import io.mikoshift.natsu.domain.model.reading.SearchIndex
 import io.mikoshift.natsu.domain.model.reading.SearchIndexParagraph
 import io.mikoshift.natsu.domain.model.reading.SectionCharOffset
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.nio.charset.StandardCharsets
 import java.util.UUID
+import java.util.zip.ZipInputStream
 
 class BookStorage private constructor(
     private val booksRoot: File,
@@ -59,6 +61,38 @@ class BookStorage private constructor(
         return gson.fromJson(json, ManifestJson::class.java).toDomain(bookDir)
     }
 
+    fun writeBinaryFile(bookDir: File, relativePath: String, bytes: ByteArray) {
+        require(bytes.size <= MAX_CONTENT_BYTES) {
+            "Content exceeds maximum size of $MAX_CONTENT_BYTES bytes"
+        }
+        val targetFile = BookPathResolver.resolveRelativePath(bookDir, relativePath)
+        targetFile.parentFile?.mkdirs()
+        targetFile.writeBytes(bytes)
+    }
+
+    fun unzipEpubToBookDir(bookDir: File, epubBytes: ByteArray) {
+        var totalUnzipped = 0
+        ZipInputStream(ByteArrayInputStream(epubBytes)).use { zipInput ->
+            var entry = zipInput.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    val relativePath = entry.name.replace('\\', '/').removePrefix("/")
+                    require(relativePath.isNotBlank()) { "EPUB entry path is blank" }
+                    val targetFile = BookPathResolver.resolveRelativePath(bookDir, relativePath)
+                    val bytes = zipInput.readBytes()
+                    totalUnzipped += bytes.size
+                    require(totalUnzipped <= MAX_CONTENT_BYTES) {
+                        "Unzipped EPUB exceeds maximum size of $MAX_CONTENT_BYTES bytes"
+                    }
+                    targetFile.parentFile?.mkdirs()
+                    targetFile.writeBytes(bytes)
+                }
+                zipInput.closeEntry()
+                entry = zipInput.nextEntry
+            }
+        }
+    }
+
     fun writeContentFile(bookDir: File, relativePath: String, content: String) {
         val bytes = content.toByteArray(StandardCharsets.UTF_8)
         require(bytes.size <= MAX_CONTENT_BYTES) {
@@ -91,6 +125,7 @@ class BookStorage private constructor(
         const val SEARCH_INDEX_FILE_NAME = "search_index.json"
         const val PLAIN_TEXT_CONTENT_PATH = "content.txt"
         const val MARKDOWN_CONTENT_PATH = "content.md"
+        const val SOURCE_EPUB_PATH = "source.epub"
         const val MAX_CONTENT_BYTES = 50 * 1024 * 1024
     }
 }

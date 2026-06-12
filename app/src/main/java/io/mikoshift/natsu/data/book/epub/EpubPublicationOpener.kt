@@ -1,4 +1,4 @@
-package io.mikoshift.natsu.data.book.epub.spike
+package io.mikoshift.natsu.data.book.epub
 
 import android.content.Context
 import java.io.File

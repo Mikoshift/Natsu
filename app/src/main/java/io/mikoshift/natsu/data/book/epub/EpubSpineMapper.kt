@@ -1,29 +1,33 @@
-package io.mikoshift.natsu.data.book.epub.spike
+package io.mikoshift.natsu.data.book.epub
 
+import io.mikoshift.natsu.domain.model.reading.ManifestSection
 import org.readium.r2.shared.publication.Link
 import org.readium.r2.shared.publication.Publication
 
-data class EpubSpineItem(
-    val id: String,
-    val href: String,
-    val title: String?,
-    val link: Link,
-)
-
 object EpubSpineMapper {
-    fun mapSpine(publication: Publication): List<EpubSpineItem> {
+    fun mapSpineToManifestSections(publication: Publication): List<ManifestSection> {
         val titlesByHref = flattenTableOfContents(publication.tableOfContents)
         return publication.readingOrder
             .filter(::isHtmlSpineItem)
             .mapIndexed { index, link ->
-                val href = link.url().toString()
-                EpubSpineItem(
-                    id = link.title?.takeIf { it.isNotBlank() } ?: "spine-$index",
-                    href = href,
+                val href = normalizePublicationHref(link.url().toString())
+                ManifestSection(
+                    id = "spine-$index",
                     title = titlesByHref[href] ?: link.title,
-                    link = link,
+                    path = href,
                 )
             }
+    }
+
+    internal fun normalizePublicationHref(href: String): String {
+        val withoutFragment = href.substringBefore('#')
+        val path = when {
+            withoutFragment.contains("://") -> {
+                java.net.URI(withoutFragment).path.orEmpty()
+            }
+            else -> withoutFragment
+        }
+        return path.removePrefix("/")
     }
 
     private fun isHtmlSpineItem(link: Link): Boolean {
@@ -38,7 +42,7 @@ object EpubSpineMapper {
         val titles = linkedMapOf<String, String>()
         fun walk(nodes: List<Link>) {
             nodes.forEach { link ->
-                val href = link.url().toString()
+                val href = normalizePublicationHref(link.url().toString())
                 val title = link.title?.takeIf { it.isNotBlank() }
                 if (title != null && href !in titles) {
                     titles[href] = title

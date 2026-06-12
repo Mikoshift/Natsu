@@ -13,3 +13,13 @@ class UnsupportedFormatException(fileName: String) :
 
 class FileTooLargeException :
     BookImportException("File exceeds maximum import size")
+
+class UnsupportedEpubException :
+    BookImportException("Unsupported EPUB")
+
+class CorruptEpubException(cause: Throwable? = null) :
+    BookImportException("Corrupt or unreadable EPUB") {
+    init {
+        cause?.let { initCause(it) }
+    }
+}

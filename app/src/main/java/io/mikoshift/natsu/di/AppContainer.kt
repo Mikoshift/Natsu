@@ -6,8 +6,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.mikoshift.natsu.data.book.BookImportCoordinator
 import io.mikoshift.natsu.data.book.BookStorage
+import io.mikoshift.natsu.data.book.import.EpubBookImporter
 import io.mikoshift.natsu.data.book.import.MarkdownBookImporter
 import io.mikoshift.natsu.data.book.import.PlainTextBookImporter
+import io.mikoshift.natsu.data.book.load.EpubFormatLoader
 import io.mikoshift.natsu.data.book.load.ManifestReadingContentLoader
 import io.mikoshift.natsu.data.book.load.MarkdownFormatLoader
 import io.mikoshift.natsu.data.book.load.PlainTextFormatLoader
@@ -42,6 +44,10 @@ class AppContainer(context: Context) {
         BookImportCoordinator(
             context = appContext,
             importers = listOf(
+                EpubBookImporter(
+                    context = appContext,
+                    bookStorage = bookStorage,
+                ),
                 MarkdownBookImporter(
                     context = appContext,
                     bookStorage = bookStorage,
@@ -59,6 +65,7 @@ class AppContainer(context: Context) {
             formatLoaders = listOf(
                 PlainTextFormatLoader(),
                 MarkdownFormatLoader(),
+                EpubFormatLoader(),
             ),
         )
     }
