@@ -191,10 +191,7 @@ class ReaderViewModel(
     fun onWebWordTap(paragraphText: String, charOffset: Int) {
         if (paragraphText.isBlank()) return
         val tokens = textTokenizer.tokenize(paragraphText)
-        val token = ReaderWordTap.tokenAtCharOffset(tokens, charOffset)
-            ?: tokens.firstOrNull { it.isClickable }
-            ?: tokens.firstOrNull()
-            ?: return
+        val token = ReaderWordTap.resolveTapToken(tokens, charOffset) ?: return
         onWordClicked(token)
     }
 

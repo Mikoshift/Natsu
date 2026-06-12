@@ -1,5 +1,5 @@
 import { callBridge } from "./native-bridge.js";
-import { getTapContext } from "./text/range-from-point.js";
+import { canTapAtPoint, getTapContext } from "./text/range-from-point.js";
 
 const SCROLL_THROTTLE_MS = 400;
 const TAP_MOVE_THRESHOLD_PX = 10;
@@ -55,7 +55,7 @@ export function installEventListeners(): void {
       if (dx * dx + dy * dy > TAP_MOVE_THRESHOLD_PX * TAP_MOVE_THRESHOLD_PX) {
         return;
       }
-      if (!getTapContext(touch.clientX, touch.clientY)) {
+      if (!canTapAtPoint(touch.clientX, touch.clientY)) {
         return;
       }
       event.preventDefault();

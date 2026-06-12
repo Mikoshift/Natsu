@@ -4,7 +4,7 @@ package io.mikoshift.natsu.ui.reader.web
  * Contract between reader JS ([bridge.js]) and Kotlin ([ReaderJsBridge], [ReaderWebViewController]).
  *
  * ## JS -> Kotlin ([ReaderJsBridge])
- * - [ReaderJsBridge.onWordTap] — paragraph `innerText` + char offset (position in that string); Kotlin tokenizes and opens dictionary.
+ * - [ReaderJsBridge.onWordTap] — paragraph layout text + char offset; Kotlin picks the Kuromoji token at that position.
  * - [ReaderJsBridge.onScrollProgress] — chapter scroll ratio in `[0, 1]` for progress save.
  * - [ReaderJsBridge.onBridgeReady] — bridge.js loaded and `init()` ran; Kotlin may apply pending theme.
  * - [ReaderJsBridge.onChapterReady] — chapter DOM ready; Kotlin applies theme, furigana, scroll.

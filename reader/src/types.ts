@@ -46,7 +46,9 @@ export interface WebMessageEnvelope {
 
 /** JS -> Kotlin: tap payload from [getTapContext]. */
 export interface TapContext {
+  /** Paragraph layout text aligned with import/search offsets. */
   text: string;
+  /** Tap position in [text], snapped off punctuation when needed. */
   charOffset: number;
 }
 

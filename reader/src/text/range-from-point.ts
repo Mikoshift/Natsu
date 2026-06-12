@@ -1,56 +1,92 @@
 import type { TapContext } from "../types.js";
-import { innerTextOffsetInParagraph } from "./offset.js";
+import { DOMTextScanner, isWhitespace, pointInAnyRect } from "./dom-text-scanner.js";
+import { extractLayoutText, layoutOffsetAtRange } from "./layout-text.js";
+import { snapToContentOffset } from "./snap-offset.js";
 
-function findTextNodeInElement(element: Element): Text | null {
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
-  const node = walker.nextNode();
-  return node?.nodeType === Node.TEXT_NODE ? (node as Text) : null;
-}
+const BLOCK_TAGS = /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i;
 
-export function findParagraphElement(node: Node): HTMLElement {
+export function findParagraphElement(node: Node): HTMLElement | null {
   let current: Node | null = node;
   while (current && current !== document.body) {
-    if (
-      current.nodeType === Node.ELEMENT_NODE &&
-      /^(P|H[1-6]|LI|TD|BLOCKQUOTE|DIV)$/i.test((current as Element).tagName)
-    ) {
+    if (current.nodeType === Node.ELEMENT_NODE && BLOCK_TAGS.test((current as Element).tagName)) {
       return current as HTMLElement;
     }
     current = current.parentNode;
   }
-  return document.body;
+  return null;
 }
 
-export function rangeFromPoint(clientX: number, clientY: number): Range | null {
+function caretRangeFromPoint(clientX: number, clientY: number): Range | null {
   const doc = document as Document & {
     caretRangeFromPoint?(x: number, y: number): Range | null;
+    caretPositionFromPoint?(
+      x: number,
+      y: number,
+      options?: { shadowRoots?: ShadowRoot[] },
+    ): { offsetNode: Node; offset: number } | null;
   };
-  let range: Range | null = null;
-  if (doc.caretRangeFromPoint) {
-    range = doc.caretRangeFromPoint(clientX, clientY);
-  } else if (doc.caretPositionFromPoint) {
+
+  if (typeof doc.caretPositionFromPoint === "function") {
     const position = doc.caretPositionFromPoint(clientX, clientY);
-    if (position) {
-      range = doc.createRange();
+    if (position?.offsetNode) {
+      const range = document.createRange();
       range.setStart(position.offsetNode, position.offset);
       range.collapse(true);
+      return range;
     }
   }
-  if (range && range.startContainer.nodeType === Node.TEXT_NODE) {
+
+  if (typeof doc.caretRangeFromPoint === "function") {
+    return doc.caretRangeFromPoint(clientX, clientY);
+  }
+
+  return null;
+}
+
+function isPointInRange(clientX: number, clientY: number, range: Range): boolean {
+  if (range.startContainer.nodeType !== Node.TEXT_NODE) {
+    return false;
+  }
+
+  const startContainer = range.startContainer;
+  const startOffset = range.startOffset;
+  const endContainer = range.endContainer;
+  const endOffset = range.endOffset;
+
+  try {
+    const forward = new DOMTextScanner(startContainer, startOffset).seek(1);
+    range.setEnd(forward.node, forward.offset);
+    if (!isWhitespace(forward.content) && pointInAnyRect(clientX, clientY, range.getClientRects())) {
+      return true;
+    }
+  } finally {
+    range.setStart(startContainer, startOffset);
+    range.setEnd(endContainer, endOffset);
+    range.collapse(true);
+  }
+
+  const backward = new DOMTextScanner(startContainer, startOffset, false).seek(-1);
+  range.setStart(backward.node, backward.offset);
+  range.setEnd(backward.node, backward.offset);
+  const matched = !isWhitespace(backward.content) &&
+    pointInAnyRect(clientX, clientY, range.getClientRects());
+  range.setStart(startContainer, startOffset);
+  range.collapse(true);
+  return matched;
+}
+
+function rangeFromPoint(clientX: number, clientY: number): Range | null {
+  const range = caretRangeFromPoint(clientX, clientY);
+  if (!range) {
+    return null;
+  }
+  if (range.startContainer.nodeType !== Node.TEXT_NODE) {
+    return null;
+  }
+  if (isPointInRange(clientX, clientY, range)) {
     return range;
   }
-  const element = doc.elementFromPoint(clientX, clientY);
-  if (!element) {
-    return null;
-  }
-  const textNode = findTextNodeInElement(element);
-  if (!textNode) {
-    return null;
-  }
-  range = doc.createRange();
-  range.setStart(textNode, 0);
-  range.collapse(true);
-  return range;
+  return null;
 }
 
 export function getTapContext(clientX: number, clientY: number): TapContext | null {
@@ -58,13 +94,34 @@ export function getTapContext(clientX: number, clientY: number): TapContext | nu
   if (!range) {
     return null;
   }
+
   const paragraph = findParagraphElement(range.startContainer);
-  const text = paragraph.innerText || paragraph.textContent || "";
+  if (!paragraph) {
+    return null;
+  }
+
+  const text = extractLayoutText(paragraph);
   if (!text.trim()) {
     return null;
   }
+
+  const charOffset = layoutOffsetAtRange(paragraph, range);
+  if (charOffset === null) {
+    return null;
+  }
+
+  const snappedOffset = snapToContentOffset(text, charOffset);
+  if (snappedOffset === null) {
+    return null;
+  }
+
   return {
     text,
-    charOffset: innerTextOffsetInParagraph(paragraph, range),
+    charOffset: snappedOffset,
   };
+}
+
+/** Used by tests and pre-tap validation in touch handlers. */
+export function canTapAtPoint(clientX: number, clientY: number): boolean {
+  return getTapContext(clientX, clientY) !== null;
 }
