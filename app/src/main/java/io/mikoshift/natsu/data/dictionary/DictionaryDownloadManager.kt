@@ -21,45 +21,51 @@ class DictionaryDownloadManager(
             require(maxBytes > 0) { "maxBytes must be positive" }
 
             destination.parentFile?.mkdirs()
+            destination.delete()
             val request = Request.Builder().url(url).build()
-            client.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) {
-                    error("Download failed: HTTP ${response.code}")
-                }
-                val body = response.body ?: error("Empty response body")
-                val totalBytes = body.contentLength()
-                body.byteStream().use { input ->
-                    FileOutputStream(destination).use { output ->
-                        val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
-                        var downloaded = 0L
-                        var zipMagicVerified = false
-                        while (true) {
-                            val read = input.read(buffer)
-                            if (read == -1) break
-                            if (!zipMagicVerified) {
-                                if (read < 2 ||
-                                    buffer[0] != ZIP_MAGIC_BYTE_0 ||
-                                    buffer[1] != ZIP_MAGIC_BYTE_1
-                                ) {
-                                    error("Download is not a valid ZIP archive")
+            try {
+                client.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        error("Download failed: HTTP ${response.code}")
+                    }
+                    val body = response.body ?: error("Empty response body")
+                    val totalBytes = body.contentLength()
+                    body.byteStream().use { input ->
+                        FileOutputStream(destination).use { output ->
+                            val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                            var downloaded = 0L
+                            var zipMagicVerified = false
+                            while (true) {
+                                val read = input.read(buffer)
+                                if (read == -1) break
+                                if (!zipMagicVerified) {
+                                    if (read < 2 ||
+                                        buffer[0] != ZIP_MAGIC_BYTE_0 ||
+                                        buffer[1] != ZIP_MAGIC_BYTE_1
+                                    ) {
+                                        error("Download is not a valid ZIP archive")
+                                    }
+                                    zipMagicVerified = true
                                 }
-                                zipMagicVerified = true
+                                downloaded += read
+                                if (downloaded > maxBytes) {
+                                    error("Download exceeds maximum size limit ($maxBytes bytes)")
+                                }
+                                output.write(buffer, 0, read)
+                                if (totalBytes > 0) {
+                                    onProgress(downloaded.toFloat() / totalBytes.toFloat())
+                                }
                             }
-                            downloaded += read
-                            if (downloaded > maxBytes) {
-                                error("Download exceeds maximum size limit ($maxBytes bytes)")
+                            if (!zipMagicVerified) {
+                                error("Download is not a valid ZIP archive")
                             }
-                            output.write(buffer, 0, read)
-                            if (totalBytes > 0) {
-                                onProgress(downloaded.toFloat() / totalBytes.toFloat())
-                            }
-                        }
-                        if (!zipMagicVerified) {
-                            error("Download is not a valid ZIP archive")
                         }
                     }
+                    onProgress(1f)
                 }
-                onProgress(1f)
+            } catch (error: Throwable) {
+                destination.delete()
+                throw error
             }
         }
     }

@@ -8,6 +8,7 @@
     <string name="import_error_empty">The selected file is empty</string>
     <string name="import_error_unsupported_encoding">Unsupported text encoding. Use UTF-8, Shift-JIS, or EUC-JP.</string>
     <string name="import_error_unsupported_format">This file format is not supported</string>
+    <string name="import_error_file_too_large">File is too large (maximum 50 MB)</string>
     <string name="import_error_generic">Import failed</string>
     <string name="reader_title">Reader</string>
     <string name="reader_sections">Sections</string>

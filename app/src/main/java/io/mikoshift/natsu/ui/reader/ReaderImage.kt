@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import java.io.File
+import java.nio.file.Path
 
 @Composable
 fun ReaderImage(
@@ -62,20 +63,18 @@ private fun ReaderImagePlaceholder(
 }
 
 internal fun resolveLocalImageFile(bookStoragePath: String, source: String): File? {
-    if (source.contains("..") || source.startsWith("/")) return null
+    if (source.isBlank() || source.startsWith("/") || source.startsWith("\\")) return null
+    if (source.split('/', '\\').any { it == ".." }) return null
     return runCatching {
-        val bookRoot = File(bookStoragePath).canonicalFile
-        val imageFile = File(bookRoot, source).canonicalFile
-        if (!imageFile.isUnderDirectory(bookRoot) || !imageFile.isFile) {
+        val bookRoot = File(bookStoragePath).canonicalFile.toPath()
+        val imageFile = bookRoot.resolve(source).normalize()
+        if (!isUnderRoot(imageFile, bookRoot)) {
             null
         } else {
-            imageFile
+            imageFile.toFile().takeIf { it.isFile }
         }
     }.getOrNull()
 }
 
-private fun File.isUnderDirectory(root: File): Boolean {
-    val rootPath = root.path
-    val filePath = path
-    return filePath == rootPath || filePath.startsWith("$rootPath${File.separator}")
-}
+private fun isUnderRoot(resolved: Path, root: Path): Boolean =
+    resolved.startsWith(root.resolve(""))

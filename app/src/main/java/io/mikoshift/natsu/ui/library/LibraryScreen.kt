@@ -57,6 +57,7 @@ import io.mikoshift.natsu.R
 import io.mikoshift.natsu.data.book.import.BookImportException
 import io.mikoshift.natsu.data.book.import.CannotOpenFileException
 import io.mikoshift.natsu.data.book.import.EmptyFileException
+import io.mikoshift.natsu.data.book.import.FileTooLargeException
 import io.mikoshift.natsu.data.book.import.UnsupportedFormatException
 import io.mikoshift.natsu.data.book.import.UnsupportedTextEncodingException
 import io.mikoshift.natsu.domain.model.Document
@@ -328,6 +329,7 @@ private fun resolveLibraryErrorMessage(context: Context, error: Throwable): Stri
         is EmptyFileException -> context.getString(R.string.import_error_empty)
         is UnsupportedTextEncodingException -> context.getString(R.string.import_error_unsupported_encoding)
         is UnsupportedFormatException -> context.getString(R.string.import_error_unsupported_format)
+        is FileTooLargeException -> context.getString(R.string.import_error_file_too_large)
         else -> context.getString(R.string.import_error_generic)
     }
 }
