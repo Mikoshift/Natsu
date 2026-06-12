@@ -1,124 +1,83 @@
 package io.mikoshift.natsu.ui.reader
 
-import io.mikoshift.natsu.data.reader.ReadingLayoutBuilder
-import io.mikoshift.natsu.domain.model.TextToken
-import io.mikoshift.natsu.domain.model.reading.ReadingBlock
-import io.mikoshift.natsu.domain.model.reading.ReadingBook
-import io.mikoshift.natsu.domain.model.reading.ReadingSection
-import io.mikoshift.natsu.domain.model.reading.TextSpan
+import io.mikoshift.natsu.domain.model.reading.BookFormat
+import io.mikoshift.natsu.domain.model.reading.BookManifest
+import io.mikoshift.natsu.domain.model.reading.ManifestSection
+import io.mikoshift.natsu.domain.model.reading.ReadingBookOutline
+import io.mikoshift.natsu.domain.model.reading.SearchIndex
+import io.mikoshift.natsu.domain.model.reading.SearchIndexParagraph
+import io.mikoshift.natsu.domain.model.reading.SectionCharOffset
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ReaderDisplayBuilderTest {
 
     @Test
-    fun buildItems_mapsImagesWithoutLayoutParagraphIndex() {
-        val book = ReadingBook(
-            id = "book-1",
-            title = "Test",
-            sections = listOf(
-                ReadingSection(
-                    id = "main",
-                    title = null,
-                    blocks = listOf(
-                        ReadingBlock.Heading(text = "Title", level = 1),
-                        ReadingBlock.Paragraph(listOf(TextSpan("Body"))),
-                        ReadingBlock.Image(relativePath = "images/cover.png", alt = "Cover"),
-                    ),
-                ),
-            ),
-        )
-        val layout = ReadingLayoutBuilder().build(book)
-        val tokenized = listOf(
-            listOf(
-                TextToken(
-                    surface = "Title",
-                    reading = "Title",
-                    lemma = "Title",
-                    partOfSpeech = "名詞",
-                    isClickable = false,
-                ),
-            ),
-            listOf(
-                TextToken(
-                    surface = "Body",
-                    reading = "Body",
-                    lemma = "Body",
-                    partOfSpeech = "名詞",
-                    isClickable = false,
-                ),
-            ),
+    fun buildSectionNav_returnsEmptyForSingleSection() {
+        val outline = outlineWithSections(
+            sections = listOf(ManifestSection(id = "main", title = null, path = "content.html")),
         )
 
-        val items = ReaderDisplayBuilder.buildItems(
-            book = book,
-            bookStoragePath = "/books/book-1",
-            tokenizedParagraphs = tokenized,
-        )
-
-        assertEquals(3, items.size)
-        assertEquals(0, items[0].layoutParagraphIndex)
-        assertEquals(1, items[1].layoutParagraphIndex)
-        assertEquals(null, items[2].layoutParagraphIndex)
-        assertEquals(2, layout.paragraphs.size)
-        assertEquals(1, ReaderDisplayBuilder.displayIndexForLayoutParagraph(items, layoutParagraphIndex = 1))
+        assertTrue(ReaderDisplayBuilder.buildSectionNav(outline).isEmpty())
     }
 
     @Test
-    fun buildItems_skipsLayoutParagraphIndexForEmptyBlocks() {
-        val book = ReadingBook(
+    fun buildSectionNav_mapsMultiSectionTitlesAndOffsets() {
+        val outline = outlineWithSections(
+            sections = listOf(
+                ManifestSection(id = "chapter-1", title = "One", path = "chapter-1.html"),
+                ManifestSection(id = "chapter-2", title = "Two", path = "chapter-2.html"),
+            ),
+            paragraphs = listOf(
+                SearchIndexParagraph(
+                    sectionId = "chapter-1",
+                    blockIndex = 0,
+                    globalCharOffset = 0,
+                    text = "First",
+                ),
+                SearchIndexParagraph(
+                    sectionId = "chapter-2",
+                    blockIndex = 0,
+                    globalCharOffset = 10,
+                    text = "Second",
+                ),
+            ),
+            sectionOffsets = listOf(
+                SectionCharOffset(sectionId = "chapter-1", globalCharOffset = 0, charCount = 10),
+                SectionCharOffset(sectionId = "chapter-2", globalCharOffset = 10, charCount = 8),
+            ),
+        )
+
+        val nav = ReaderDisplayBuilder.buildSectionNav(outline)
+
+        assertEquals(2, nav.size)
+        assertEquals("One", nav[0].title)
+        assertEquals(0, nav[0].startLayoutParagraphIndex)
+        assertEquals("Two", nav[1].title)
+        assertEquals(1, nav[1].startLayoutParagraphIndex)
+    }
+
+    private fun outlineWithSections(
+        sections: List<ManifestSection>,
+        paragraphs: List<SearchIndexParagraph> = emptyList(),
+        sectionOffsets: List<SectionCharOffset> = emptyList(),
+    ): ReadingBookOutline {
+        return ReadingBookOutline(
             id = "book-1",
             title = "Test",
-            sections = listOf(
-                ReadingSection(
-                    id = "main",
-                    title = null,
-                    blocks = listOf(
-                        ReadingBlock.Paragraph(listOf(TextSpan("First"))),
-                        ReadingBlock.Paragraph(emptyList()),
-                        ReadingBlock.Heading(text = "   ", level = 2),
-                        ReadingBlock.Paragraph(listOf(TextSpan("Second"))),
-                    ),
-                ),
+            manifest = BookManifest(
+                version = 2,
+                format = BookFormat.PlainText,
+                title = "Test",
+                sections = sections,
             ),
-        )
-        val layout = ReadingLayoutBuilder().build(book)
-        val tokenized = listOf(
-            listOf(
-                TextToken(
-                    surface = "First",
-                    reading = "First",
-                    lemma = "First",
-                    partOfSpeech = "名詞",
-                    isClickable = false,
-                ),
+            searchIndex = SearchIndex(
+                version = 1,
+                totalCharCount = sectionOffsets.sumOf { it.charCount },
+                sectionOffsets = sectionOffsets,
+                paragraphs = paragraphs,
             ),
-            listOf(
-                TextToken(
-                    surface = "Second",
-                    reading = "Second",
-                    lemma = "Second",
-                    partOfSpeech = "名詞",
-                    isClickable = false,
-                ),
-            ),
-        )
-
-        val items = ReaderDisplayBuilder.buildItems(
-            book = book,
-            bookStoragePath = "/books/book-1",
-            tokenizedParagraphs = tokenized,
-        )
-
-        assertEquals(4, items.size)
-        assertEquals(0, items[0].layoutParagraphIndex)
-        assertEquals(null, items[1].layoutParagraphIndex)
-        assertEquals(null, items[2].layoutParagraphIndex)
-        assertEquals(1, items[3].layoutParagraphIndex)
-        assertEquals(2, layout.paragraphs.size)
-        assertEquals(
-            3,
-            ReaderDisplayBuilder.displayIndexForLayoutParagraph(items, layoutParagraphIndex = 1),
         )
     }
 }
