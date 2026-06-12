@@ -5,3 +5,9 @@ data class ReaderSectionNav(
     val title: String,
     val startLayoutParagraphIndex: Int,
 )
+
+data class TapHighlightRequest(
+    val paragraphIndex: Int,
+    val start: Int,
+    val end: Int,
+)

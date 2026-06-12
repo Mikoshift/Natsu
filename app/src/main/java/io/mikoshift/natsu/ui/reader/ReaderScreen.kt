@@ -167,6 +167,9 @@ fun ReaderScreen(
                             scrollRequestId = uiState.scrollRequestId,
                             searchHighlightRanges = uiState.searchHighlightRanges,
                             furiganaTokens = uiState.furiganaTokens,
+                            layoutParagraphs = uiState.layoutParagraphs,
+                            tapHighlightRequest = uiState.tapHighlightRequest,
+                            tapHighlightRequestId = uiState.tapHighlightRequestId,
                             controller = webViewController,
                             onWordTap = viewModel::onWebWordTap,
                             onChapterReady = {

@@ -2,6 +2,7 @@ import type { TapContext } from "../types.js";
 import { DOMTextScanner, isWhitespace, pointInAnyRect } from "./dom-text-scanner.js";
 import { extractLayoutText, layoutOffsetAtRange } from "./layout-text.js";
 import { snapToContentOffset } from "./snap-offset.js";
+import { PARAGRAPH_INDEX_ATTR } from "../text/paragraph-index.js";
 
 const PREFERRED_BLOCK_TAGS = new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
 
@@ -22,6 +23,15 @@ export function findParagraphElement(node: Node): HTMLElement | null {
     current = current.parentNode;
   }
   return divFallback;
+}
+
+export function paragraphIndexFromElement(paragraph: HTMLElement): number {
+  const raw = paragraph.getAttribute(PARAGRAPH_INDEX_ATTR);
+  if (raw === null) {
+    return -1;
+  }
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isNaN(parsed) ? -1 : parsed;
 }
 
 function caretRangeFromPoint(clientX: number, clientY: number): Range | null {
@@ -125,8 +135,10 @@ export function getTapContext(clientX: number, clientY: number): TapContext | nu
   }
 
   return {
+    paragraphIndex: paragraphIndexFromElement(paragraph),
     text,
     charOffset: snappedOffset,
+    paragraph,
   };
 }
 

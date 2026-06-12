@@ -7,7 +7,12 @@ export function bridge(): NativeBridge | undefined {
   return window[BRIDGE_NAME];
 }
 
-export function callBridge(method: "onWordTap", text: string, charOffset: number): void;
+export function callBridge(
+  method: "onWordTap",
+  paragraphIndex: number,
+  charOffset: number,
+  paragraphText: string,
+): void;
 export function callBridge(method: "onScrollProgress", ratio: number): void;
 export function callBridge(method: "onBridgeReady" | "onChapterReady"): void;
 export function callBridge(method: keyof NativeBridge, ...args: unknown[]): void {

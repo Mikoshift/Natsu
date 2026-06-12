@@ -63,6 +63,9 @@ data class ReaderUiState(
     val scrollRequestId: Long = 0L,
     val searchHighlightRanges: List<IntRange> = emptyList(),
     val furiganaTokens: List<FuriganaInjectToken> = emptyList(),
+    val layoutParagraphs: List<String> = emptyList(),
+    val tapHighlightRequest: TapHighlightRequest? = null,
+    val tapHighlightRequestId: Long = 0L,
     val wordLookup: WordLookupState = WordLookupState.Hidden,
     val searchActive: Boolean = false,
     val searchQuery: String = "",
@@ -191,12 +194,26 @@ class ReaderViewModel(
         )
     }
 
-    fun onWebWordTap(paragraphText: String, charOffset: Int) {
-        if (paragraphText.isBlank()) return
+    fun onWebWordTap(paragraphIndex: Int, charOffset: Int, paragraphText: String) {
         val sectionId = _uiState.value.currentSectionId ?: return
-        val tokens = sectionTokenCache.tokens(sectionId, paragraphText, textTokenizer::tokenize)
-        val token = ReaderWordTap.resolveTapToken(tokens, charOffset) ?: return
-        onWordClicked(token)
+        val tokens = sectionTokenCache.tokens(sectionId, paragraphIndex)
+            ?: if (paragraphText.isBlank()) {
+                return
+            } else {
+                sectionTokenCache.tokensByText(sectionId, paragraphText, textTokenizer::tokenize)
+            }
+        val match = ReaderWordTap.resolveTapMatch(tokens, charOffset) ?: return
+        _uiState.update {
+            it.copy(
+                tapHighlightRequest = TapHighlightRequest(
+                    paragraphIndex = paragraphIndex,
+                    start = match.start,
+                    end = match.end,
+                ),
+                tapHighlightRequestId = it.tapHighlightRequestId + 1,
+            )
+        }
+        onWordClicked(match.token)
     }
 
     fun onWebScrollProgress(ratio: Float) {
@@ -227,6 +244,7 @@ class ReaderViewModel(
         val searchIndex = outline?.searchIndex ?: return
         val sectionId = state.currentSectionId ?: return
         viewModelScope.launch {
+            val sectionContent = loadedSections[sectionId]
             val furiganaTokens = withContext(Dispatchers.Default) {
                 buildFuriganaTokens(sectionId)
             }
@@ -234,6 +252,7 @@ class ReaderViewModel(
             _uiState.update {
                 it.copy(
                     furiganaTokens = furiganaTokens,
+                    layoutParagraphs = sectionContent?.layout?.paragraphs ?: emptyList(),
                     searchHighlightRanges = activeHighlight,
                 )
             }
@@ -419,6 +438,8 @@ class ReaderViewModel(
                 searchHighlightRanges = searchHighlightRanges,
                 searchMatchIndex = searchMatchIndex,
                 furiganaTokens = emptyList(),
+                layoutParagraphs = emptyList(),
+                tapHighlightRequest = null,
             )
         }
         return true
@@ -431,8 +452,8 @@ class ReaderViewModel(
         loadedSections[sectionId] = sectionContent
         sectionTokenCache.warm(
             sectionId = sectionId,
-            paragraphs = sectionContent.layout.paragraphs,
-            tokenize = textTokenizer::tokenize,
+            sectionContent = sectionContent,
+            tokenizer = textTokenizer,
         )
         return true
     }

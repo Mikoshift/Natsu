@@ -385,6 +385,9 @@
     return /[\p{L}\p{N}]/u.test(character);
   }
 
+  // reader/src/text/paragraph-index.ts
+  var PARAGRAPH_INDEX_ATTR = "data-natsu-paragraph-index";
+
   // reader/src/text/range-from-point.ts
   var PREFERRED_BLOCK_TAGS = /* @__PURE__ */ new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
   function findParagraphElement(node) {
@@ -404,6 +407,14 @@
       current = current.parentNode;
     }
     return divFallback;
+  }
+  function paragraphIndexFromElement(paragraph) {
+    const raw = paragraph.getAttribute(PARAGRAPH_INDEX_ATTR);
+    if (raw === null) {
+      return -1;
+    }
+    const parsed = Number.parseInt(raw, 10);
+    return Number.isNaN(parsed) ? -1 : parsed;
   }
   function caretRangeFromPoint(clientX, clientY) {
     const doc = document;
@@ -483,8 +494,10 @@
       return null;
     }
     return {
+      paragraphIndex: paragraphIndexFromElement(paragraph),
       text,
-      charOffset: snappedOffset
+      charOffset: snappedOffset,
+      paragraph
     };
   }
   function canTapAtPoint(clientX, clientY) {
@@ -522,7 +535,7 @@
     if (!result) {
       return;
     }
-    callBridge("onWordTap", result.text, result.charOffset);
+    callBridge("onWordTap", result.paragraphIndex, result.charOffset, result.text);
   }
   function installEventListeners() {
     document.addEventListener(
@@ -640,6 +653,75 @@
     });
   }
 
+  // reader/src/features/tap-highlight.ts
+  var FLASH_MS = 300;
+  var activeFlashTimeout = null;
+  function highlightTapToken(paragraphIndex, start, end) {
+    if (paragraphIndex < 0 || start >= end) {
+      return;
+    }
+    const paragraph = findParagraphByIndex(paragraphIndex);
+    if (!paragraph) {
+      return;
+    }
+    flashTapRange(paragraph, start, end);
+  }
+  function flashTapRange(paragraph, start, end) {
+    var _a;
+    clearTapFlash();
+    if (activeFlashTimeout !== null) {
+      window.clearTimeout(activeFlashTimeout);
+      activeFlashTimeout = null;
+    }
+    const segments = layoutSegmentsForRange(paragraph, start, end);
+    if (segments.length === 0) {
+      return;
+    }
+    for (let index = segments.length - 1; index >= 0; index -= 1) {
+      const segment = segments[index];
+      const localLength = segment.localEnd - segment.localStart;
+      if (localLength <= 0) {
+        continue;
+      }
+      const textNode = segment.node;
+      const rawEnd = visibleToRawOffset(textNode, segment.localEnd);
+      const rawStart = visibleToRawOffset(textNode, segment.localStart);
+      if (rawEnd < textNode.length) {
+        textNode.splitText(rawEnd);
+      }
+      let flashNode = textNode;
+      if (rawStart > 0) {
+        flashNode = textNode.splitText(rawStart);
+      }
+      const mark = document.createElement("span");
+      mark.className = "natsu-tap-flash";
+      (_a = flashNode.parentNode) == null ? void 0 : _a.replaceChild(mark, flashNode);
+      mark.appendChild(flashNode);
+    }
+    activeFlashTimeout = window.setTimeout(() => {
+      clearTapFlash();
+      activeFlashTimeout = null;
+    }, FLASH_MS);
+  }
+  function clearTapFlash() {
+    document.querySelectorAll("span.natsu-tap-flash").forEach((mark) => {
+      const parent = mark.parentNode;
+      if (!parent) {
+        return;
+      }
+      while (mark.firstChild) {
+        parent.insertBefore(mark.firstChild, mark);
+      }
+      parent.removeChild(mark);
+      if (parent instanceof HTMLElement) {
+        parent.normalize();
+      }
+    });
+  }
+  function findParagraphByIndex(paragraphIndex) {
+    return document.querySelector("[".concat(PARAGRAPH_INDEX_ATTR, '="').concat(paragraphIndex, '"]'));
+  }
+
   // reader/src/features/ruby.ts
   function injectRuby(tokens) {
     if (!(tokens == null ? void 0 : tokens.length)) {
@@ -703,6 +785,81 @@
     const rect = range.getBoundingClientRect();
     const targetTop = window.scrollY + rect.top - window.innerHeight * 0.3;
     window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
+  }
+
+  // reader/src/features/tag-paragraphs.ts
+  var PREFERRED_BLOCK_TAGS2 = /* @__PURE__ */ new Set(["P", "LI", "TD", "BLOCKQUOTE", "H1", "H2", "H3", "H4", "H5", "H6"]);
+  var NESTED_BLOCK_SELECTOR = "p, li, h1, h2, h3, h4, h5, h6, td, blockquote, div";
+  function tagParagraphs(expectedTexts) {
+    if (!(expectedTexts == null ? void 0 : expectedTexts.length)) {
+      return;
+    }
+    const root = collectTextRoot();
+    const blocks = collectLayoutBlocks(root);
+    let cursor = 0;
+    blocks.forEach((block) => {
+      if (block.hasAttribute(PARAGRAPH_INDEX_ATTR)) {
+        return;
+      }
+      const text = extractLayoutText(block);
+      if (!text.trim()) {
+        return;
+      }
+      const matchedIndex = matchParagraphIndex(text, expectedTexts, cursor);
+      if (matchedIndex >= 0) {
+        block.setAttribute(PARAGRAPH_INDEX_ATTR, String(matchedIndex));
+        cursor = matchedIndex + 1;
+      }
+    });
+  }
+  function matchParagraphIndex(text, expectedTexts, cursor) {
+    if (cursor < expectedTexts.length && textsMatch(text, expectedTexts[cursor])) {
+      return cursor;
+    }
+    return expectedTexts.findIndex((expected, index) => index >= cursor && textsMatch(text, expected));
+  }
+  function collectLayoutBlocks(root) {
+    const blocks = [];
+    collectBlocksFrom(root, blocks);
+    return blocks;
+  }
+  function collectBlocksFrom(container, blocks) {
+    container.childNodes.forEach((child) => {
+      if (child.nodeType !== Node.ELEMENT_NODE) {
+        return;
+      }
+      const element = child;
+      const tag = element.tagName.toUpperCase();
+      if (PREFERRED_BLOCK_TAGS2.has(tag)) {
+        if (extractLayoutText(element).trim()) {
+          blocks.push(element);
+        }
+        return;
+      }
+      if (tag === "DIV") {
+        if (hasNestedLayoutBlock(element)) {
+          collectBlocksFrom(element, blocks);
+        } else if (extractLayoutText(element).trim()) {
+          blocks.push(element);
+        }
+        return;
+      }
+      if (hasNestedLayoutBlock(element)) {
+        collectBlocksFrom(element, blocks);
+      }
+    });
+  }
+  function hasNestedLayoutBlock(element) {
+    return element.querySelector(NESTED_BLOCK_SELECTOR) !== null;
+  }
+  function textsMatch(actual, expected) {
+    if (actual === expected) {
+      return true;
+    }
+    return normalizeLayoutText(actual) === normalizeLayoutText(expected);
+  }
+  function normalizeLayoutText(text) {
+    return text.replace(/\s+/g, " ").trim();
   }
 
   // reader/src/messages.ts
@@ -782,6 +939,8 @@
         });
       },
       applyTheme,
+      tagParagraphs,
+      highlightTapToken,
       highlightSearch,
       injectRuby,
       scrollToOffset

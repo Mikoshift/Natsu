@@ -35,7 +35,7 @@ function handleWordTap(clientX: number, clientY: number): void {
   if (!result) {
     return;
   }
-  callBridge("onWordTap", result.text, result.charOffset);
+  callBridge("onWordTap", result.paragraphIndex, result.charOffset, result.text);
 }
 
 export function installEventListeners(): void {

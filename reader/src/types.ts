@@ -27,6 +27,8 @@ export interface RubyToken {
 export interface ReaderApi {
   init(): void;
   applyTheme(vars: ThemeVars): void;
+  tagParagraphs(texts: string[]): void;
+  highlightTapToken(paragraphIndex: number, start: number, end: number): void;
   highlightSearch(ranges: SearchRange[]): void;
   injectRuby(tokens: RubyToken[]): void;
   scrollToOffset(charOffset: number): void;
@@ -34,7 +36,7 @@ export interface ReaderApi {
 
 /** JS -> Kotlin via `@JavascriptInterface` ([ReaderJsBridge]). */
 export interface NativeBridge {
-  onWordTap(text: string, charOffset: number): void;
+  onWordTap(paragraphIndex: number, charOffset: number, paragraphText: string): void;
   onScrollProgress(ratio: number): void;
   onBridgeReady(): void;
   onChapterReady(): void;
@@ -46,12 +48,14 @@ export interface WebMessageEnvelope {
   args?: unknown[];
 }
 
-/** JS -> Kotlin: tap payload from [getTapContext]. */
+/** Tap payload from [getTapContext]. */
 export interface TapContext {
-  /** Paragraph layout text aligned with import/search offsets. */
+  paragraphIndex: number;
+  /** Paragraph-local layout text (fallback for Kotlin when index is missing). */
   text: string;
-  /** Tap position in [text], snapped off punctuation when needed. */
+  /** Tap position within [text], snapped off punctuation when needed. */
   charOffset: number;
+  paragraph: HTMLElement;
 }
 
 declare global {

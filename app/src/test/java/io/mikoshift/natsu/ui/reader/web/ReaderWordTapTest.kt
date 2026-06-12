@@ -76,6 +76,36 @@ class ReaderWordTapTest {
         assertNull(ReaderWordTap.resolveTapToken(tokens, charOffset = 99))
     }
 
+    @Test
+    fun resolveTapMatch_returnsTokenBounds() {
+        val tokens = listOf(
+            token("吾輩は"),
+            token("猫"),
+            token("である"),
+        )
+
+        val match = ReaderWordTap.resolveTapMatch(tokens, charOffset = 3)
+
+        assertEquals("猫", match?.token?.surface)
+        assertEquals(3, match?.start)
+        assertEquals(4, match?.end)
+    }
+
+    @Test
+    fun resolveTapMatch_onPunctuation_returnsNearestClickableBounds() {
+        val tokens = listOf(
+            token("吾輩は"),
+            punctuation("、"),
+            token("猫"),
+        )
+
+        val match = ReaderWordTap.resolveTapMatch(tokens, charOffset = 3)
+
+        assertEquals("猫", match?.token?.surface)
+        assertEquals(4, match?.start)
+        assertEquals(5, match?.end)
+    }
+
     private fun token(surface: String): TextToken =
         TextToken(
             surface = surface,

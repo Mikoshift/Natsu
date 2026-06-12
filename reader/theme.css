@@ -74,3 +74,10 @@ ruby rt {
   font-size: 0.55em;
   user-select: none;
 }
+
+.natsu-tap-flash {
+  background: rgba(33, 150, 243, 0.35);
+  border-radius: 2px;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
