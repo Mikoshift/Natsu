@@ -31,6 +31,7 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
     buildFeatures {
         compose = true
@@ -40,6 +41,13 @@ android {
             excludes += setOf(
                 "/META-INF/CONTRIBUTORS.md",
                 "/META-INF/LICENSE.md",
+                "/META-INF/DEPENDENCIES",
+                "/META-INF/LICENSE",
+                "/META-INF/LICENSE.txt",
+                "/META-INF/NOTICE",
+                "/META-INF/NOTICE.txt",
+                "/META-INF/AL2.0",
+                "/META-INF/LGPL2.1",
             )
         }
     }
@@ -64,6 +72,10 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.commonmark)
     implementation(libs.coil.compose)
+    implementation(libs.readium.shared)
+    implementation(libs.readium.streamer)
+    implementation(libs.jsoup)
+    coreLibraryDesugaring(libs.desugar.jdk.libs)
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
     androidTestImplementation(platform(libs.androidx.compose.bom))
