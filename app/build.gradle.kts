@@ -108,7 +108,7 @@ dependencies {
     implementation(libs.androidx.webkit)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     testImplementation(libs.junit)
-    testImplementation("org.json:json:20240303")
+    testImplementation("org.json:json:20260522")
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)
