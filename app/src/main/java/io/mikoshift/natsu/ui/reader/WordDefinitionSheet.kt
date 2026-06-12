@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import io.mikoshift.natsu.R
 import io.mikoshift.natsu.domain.model.DictionaryEntry
 import io.mikoshift.natsu.domain.model.DictionarySense
+import io.mikoshift.natsu.domain.model.LookupMatchKind
 import io.mikoshift.natsu.domain.model.SenseBlock
 import io.mikoshift.natsu.domain.model.TextToken
 
@@ -88,11 +89,41 @@ private fun DictionaryEntryContent(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
+            MatchKindLabel(entry = entry)
         }
         itemsIndexed(entry.senses) { index, sense ->
             SenseItem(index = index + 1, sense = sense)
         }
     }
+}
+
+@Composable
+private fun MatchKindLabel(
+    entry: DictionaryEntry,
+    modifier: Modifier = Modifier,
+) {
+    val label = when (entry.matchKind) {
+        LookupMatchKind.Direct -> stringResource(R.string.dictionary_match_direct)
+        LookupMatchKind.Lemma -> stringResource(
+            R.string.dictionary_match_lemma,
+            entry.matchedExpression.ifBlank { entry.queryLemma },
+        )
+        LookupMatchKind.Deinflection -> stringResource(
+            R.string.dictionary_match_deinflection,
+            entry.deinflectionRuleName.orEmpty(),
+            entry.matchedExpression,
+        )
+        LookupMatchKind.Compound -> stringResource(
+            R.string.dictionary_match_compound,
+            entry.matchedExpression,
+        )
+    }
+    Text(
+        text = label,
+        modifier = modifier,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }
 
 @Composable

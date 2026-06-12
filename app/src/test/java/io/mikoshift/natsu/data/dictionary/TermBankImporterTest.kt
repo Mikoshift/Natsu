@@ -13,6 +13,29 @@ class TermBankImporterTest {
     private val importer = TermBankImporter()
 
     @Test
+    fun importZip_parsesDefinitionAndRuleTags() = runBlocking {
+        val zipFile = createZip(
+            "index.json" to """{"title":"Tagged Dict","revision":"1"}""",
+            "term_bank_1.json" to """
+                [
+                  ["食べる", "たべる", "v1 vt", "v1", 100, ["to eat"]]
+                ]
+            """.trimIndent(),
+        )
+        val terms = mutableListOf<TermRecord>()
+
+        importer.importZip(
+            zipFile = zipFile,
+            catalogId = "tagged",
+            onBatch = { terms += it },
+        )
+
+        assertEquals(1, terms.size)
+        assertEquals("v1 vt", terms[0].defTags)
+        assertEquals("v1", terms[0].ruleTags)
+    }
+
+    @Test
     fun importZip_parsesSimpleStringGlossaryEntries() = runBlocking {
         val zipFile = createZip(
             "index.json" to """{"title":"Test Dict","revision":"1"}""",

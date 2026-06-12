@@ -1,5 +1,6 @@
 package io.mikoshift.natsu.data.dictionary
 
+import io.mikoshift.natsu.domain.model.LookupMatchKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,5 +33,11 @@ class LookupMatchRankerTest {
             dedupeTermKey("jitendex", "制御", "せいぎょ"),
             dedupeTermKey("jitendex", "制御", "セイギョ"),
         )
+    }
+
+    @Test
+    fun matchKindPriority_prefersDirectOverDeinflection() {
+        assertTrue(matchKindPriority(LookupMatchKind.Direct) < matchKindPriority(LookupMatchKind.Deinflection))
+        assertTrue(matchKindPriority(LookupMatchKind.Lemma) < matchKindPriority(LookupMatchKind.Compound))
     }
 }
