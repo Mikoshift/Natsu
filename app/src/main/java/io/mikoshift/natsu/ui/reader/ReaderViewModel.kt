@@ -24,6 +24,7 @@ import io.mikoshift.natsu.domain.repository.DocumentRepository
 import io.mikoshift.natsu.domain.repository.ReadingContentRepository
 import io.mikoshift.natsu.domain.repository.TextTokenizer
 import io.mikoshift.natsu.data.settings.ReaderSettingsStore
+import io.mikoshift.natsu.ui.reader.web.ReaderSectionTokenCache
 import io.mikoshift.natsu.ui.reader.web.ReaderWebUrls
 import io.mikoshift.natsu.ui.reader.web.ReaderWordTap
 import kotlinx.coroutines.Dispatchers
@@ -96,11 +97,13 @@ class ReaderViewModel(
     private var searchJob: Job? = null
     private var outline: ReadingBookOutline? = null
     private val loadedSections = linkedMapOf<String, SectionReadingContent>()
+    private val sectionTokenCache = ReaderSectionTokenCache()
 
     fun loadDocument(documentId: String) {
         loadJob?.cancel()
         pendingLoadDocumentId = documentId
         loadedSections.clear()
+        sectionTokenCache.clear()
         outline = null
         loadJob = viewModelScope.launch {
             saveJob?.cancel()
@@ -190,7 +193,8 @@ class ReaderViewModel(
 
     fun onWebWordTap(paragraphText: String, charOffset: Int) {
         if (paragraphText.isBlank()) return
-        val tokens = textTokenizer.tokenize(paragraphText)
+        val sectionId = _uiState.value.currentSectionId ?: return
+        val tokens = sectionTokenCache.tokens(sectionId, paragraphText, textTokenizer::tokenize)
         val token = ReaderWordTap.resolveTapToken(tokens, charOffset) ?: return
         onWordClicked(token)
     }
@@ -425,36 +429,41 @@ class ReaderViewModel(
         val sectionContent = readingContentRepository.loadSection(documentId, sectionId).getOrNull()
             ?: return false
         loadedSections[sectionId] = sectionContent
+        sectionTokenCache.warm(
+            sectionId = sectionId,
+            paragraphs = sectionContent.layout.paragraphs,
+            tokenize = textTokenizer::tokenize,
+        )
         return true
     }
 
     private fun buildFuriganaTokens(sectionId: String): List<FuriganaInjectToken> {
         if (readerSettings.value.furiganaMode == FuriganaMode.OFF) return emptyList()
-        val section = loadedSections[sectionId]?.section ?: return emptyList()
+        val sectionContent = loadedSections[sectionId] ?: return emptyList()
+        val layout = sectionContent.layout
+        val section = sectionContent.section
         val tokens = mutableListOf<FuriganaInjectToken>()
-        section.blocks.forEach { block ->
-            when (block) {
-                is ReadingBlock.Paragraph -> {
-                    textTokenizer.tokenizeParagraph(block.spans)
-                        .filter(::shouldShowFurigana)
-                        .forEach { token ->
-                            tokens += FuriganaInjectToken(
-                                surface = token.surface,
-                                reading = furiganaReading(token),
-                            )
-                        }
+
+        layout.paragraphs.forEachIndexed { paragraphIndex, _ ->
+            val paragraphStart = layout.paragraphStartOffsets[paragraphIndex]
+            val blockIndex = layout.blockIndexByParagraph[paragraphIndex]
+            val block = section.blocks[blockIndex]
+            var cursor = 0
+            val morphemes = when (block) {
+                is ReadingBlock.Paragraph -> textTokenizer.tokenizeParagraph(block.spans)
+                is ReadingBlock.Heading -> textTokenizer.tokenize(block.text)
+                is ReadingBlock.Image -> emptyList()
+            }
+            morphemes.forEach { token ->
+                if (shouldShowFurigana(token)) {
+                    tokens += FuriganaInjectToken(
+                        surface = token.surface,
+                        reading = furiganaReading(token),
+                        start = paragraphStart + cursor,
+                        end = paragraphStart + cursor + token.surface.length,
+                    )
                 }
-                is ReadingBlock.Heading -> {
-                    textTokenizer.tokenize(block.text)
-                        .filter(::shouldShowFurigana)
-                        .forEach { token ->
-                            tokens += FuriganaInjectToken(
-                                surface = token.surface,
-                                reading = furiganaReading(token),
-                            )
-                        }
-                }
-                is ReadingBlock.Image -> Unit
+                cursor += token.surface.length
             }
         }
         return tokens

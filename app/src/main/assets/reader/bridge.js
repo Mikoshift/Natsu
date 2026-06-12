@@ -29,28 +29,6 @@
     }
     return false;
   }
-  function createTextWalker(root, acceptNode) {
-    return document.createTreeWalker(root, NodeFilter.SHOW_TEXT, { acceptNode });
-  }
-  function createVisibleTextWalker(root) {
-    return createTextWalker(root, (node) => {
-      if (isInsideTag(node, root, "rt")) {
-        return NodeFilter.FILTER_REJECT;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    });
-  }
-  function createInjectableTextWalker(root) {
-    return createTextWalker(root, (node) => {
-      if (isInsideTag(node, root, "rt")) {
-        return NodeFilter.FILTER_REJECT;
-      }
-      if (isInsideTag(node, root, "ruby")) {
-        return NodeFilter.FILTER_REJECT;
-      }
-      return NodeFilter.FILTER_ACCEPT;
-    });
-  }
 
   // reader/src/text/dom-text-scanner.ts
   var SKIP_TAGS = /* @__PURE__ */ new Set(["RT", "RP", "SCRIPT", "STYLE", "HEAD"]);
@@ -288,6 +266,38 @@
     });
     return result;
   }
+  function layoutSegmentsForRange(root, start, end) {
+    if (start >= end) {
+      return [];
+    }
+    const segments = [];
+    let current = 0;
+    walkLayout(root, root, (chunk, meta) => {
+      const chunkStart = current;
+      const chunkEnd = current + chunk.length;
+      if ((meta == null ? void 0 : meta.kind) === "text" && end > chunkStart && start < chunkEnd) {
+        segments.push({
+          node: meta.node,
+          localStart: Math.max(0, start - chunkStart),
+          localEnd: Math.min(chunk.length, end - chunkStart)
+        });
+      }
+      current = chunkEnd;
+    });
+    return segments;
+  }
+  function layoutRangeForSpan(root, start, end) {
+    const segments = layoutSegmentsForRange(root, start, end);
+    if (segments.length === 0) {
+      return null;
+    }
+    const first = segments[0];
+    const last = segments[segments.length - 1];
+    const range = document.createRange();
+    range.setStart(first.node, rawOffsetForVisibleIndex(first.node, first.localStart));
+    range.setEnd(last.node, rawOffsetForVisibleIndex(last.node, last.localEnd));
+    return range;
+  }
   function walkLayout(node, root, emit) {
     if (node.nodeType === Node.TEXT_NODE) {
       if (isInsideTag(node, root, "rt")) {
@@ -333,6 +343,9 @@
       }
     }
     return visible;
+  }
+  function visibleToRawOffset(node, visibleOffset) {
+    return rawOffsetForVisibleIndex(node, visibleOffset);
   }
   function rawOffsetForVisibleIndex(node, visibleIndex) {
     const text = node.textContent || "";
@@ -558,42 +571,22 @@
   }
   function highlightRange(root, start, end) {
     var _a;
-    const segments = [];
-    let current = 0;
-    const walker = createVisibleTextWalker(root);
-    let node = walker.nextNode();
-    while (node) {
-      if (node.nodeType !== Node.TEXT_NODE) {
-        node = walker.nextNode();
-        continue;
-      }
-      const textNode = node;
-      const length = (textNode.textContent || "").length;
-      const nodeStart = current;
-      const nodeEnd = current + length;
-      if (end > nodeStart && start < nodeEnd) {
-        segments.push({
-          node: textNode,
-          localStart: Math.max(0, start - nodeStart),
-          localEnd: Math.min(length, end - nodeStart)
-        });
-      }
-      current = nodeEnd;
-      node = walker.nextNode();
-    }
-    for (let i = segments.length - 1; i >= 0; i--) {
+    const segments = layoutSegmentsForRange(root, start, end);
+    for (let i = segments.length - 1; i >= 0; i -= 1) {
       const seg = segments[i];
       const localLength = seg.localEnd - seg.localStart;
       if (localLength <= 0) {
         continue;
       }
       const textNode = seg.node;
-      if (seg.localEnd < textNode.length) {
-        textNode.splitText(seg.localEnd);
+      const rawEnd = visibleToRawOffset(textNode, seg.localEnd);
+      const rawStart = visibleToRawOffset(textNode, seg.localStart);
+      if (rawEnd < textNode.length) {
+        textNode.splitText(rawEnd);
       }
       let highlightNode = textNode;
-      if (seg.localStart > 0) {
-        highlightNode = textNode.splitText(seg.localStart);
+      if (rawStart > 0) {
+        highlightNode = textNode.splitText(rawStart);
       }
       const mark = document.createElement("mark");
       mark.className = "natsu-search-highlight";
@@ -621,46 +614,46 @@
       return;
     }
     const root = collectTextRoot();
-    tokens.forEach((token) => {
-      if (!token.surface || !token.reading) {
-        return;
-      }
-      const walker = createInjectableTextWalker(root);
-      let node = walker.nextNode();
-      while (node) {
-        const parent = node.parentNode;
-        if (!parent) {
-          node = walker.nextNode();
-          continue;
-        }
-        const text = node.textContent || "";
-        const index = text.indexOf(token.surface);
-        if (index < 0) {
-          node = walker.nextNode();
-          continue;
-        }
-        const before = text.slice(0, index);
-        const after = text.slice(index + token.surface.length);
-        const ruby = document.createElement("ruby");
-        ruby.setAttribute("data-natsu-surface", token.surface);
-        const rb = document.createElement("rb");
-        rb.textContent = token.surface;
-        const rt = document.createElement("rt");
-        rt.textContent = token.reading;
-        ruby.appendChild(rb);
-        ruby.appendChild(rt);
-        const fragment = document.createDocumentFragment();
-        if (before) {
-          fragment.appendChild(document.createTextNode(before));
-        }
-        fragment.appendChild(ruby);
-        if (after) {
-          fragment.appendChild(document.createTextNode(after));
-        }
-        parent.replaceChild(fragment, node);
-        break;
-      }
+    const sorted = [...tokens].sort((left, right) => right.start - left.start);
+    sorted.forEach((token) => {
+      injectRubyAtLayoutSpan(root, token);
     });
+  }
+  function injectRubyAtLayoutSpan(root, token) {
+    if (!token.surface || !token.reading || token.start >= token.end) {
+      return;
+    }
+    if (document.querySelector('ruby[data-natsu-layout-start="'.concat(token.start, '"]'))) {
+      return;
+    }
+    const range = layoutRangeForSpan(root, token.start, token.end);
+    if (!range || isInsideExistingRuby(range.startContainer, root)) {
+      return;
+    }
+    const ruby = document.createElement("ruby");
+    ruby.setAttribute("data-natsu-layout-start", String(token.start));
+    ruby.setAttribute("data-natsu-surface", token.surface);
+    const rb = document.createElement("rb");
+    const rt = document.createElement("rt");
+    rt.textContent = token.reading;
+    try {
+      const contents = range.extractContents();
+      rb.appendChild(contents);
+      ruby.appendChild(rb);
+      ruby.appendChild(rt);
+      range.insertNode(ruby);
+    } catch (e) {
+    }
+  }
+  function isInsideExistingRuby(node, root) {
+    let current = node;
+    while (current && current !== root) {
+      if (current.nodeType === Node.ELEMENT_NODE && current.tagName.toUpperCase() === "RUBY") {
+        return true;
+      }
+      current = current.parentNode;
+    }
+    return false;
   }
 
   // reader/src/text/offset.ts

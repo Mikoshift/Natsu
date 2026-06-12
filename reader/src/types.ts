@@ -15,10 +15,12 @@ export interface SearchRange {
   end: number;
 }
 
-/** Kotlin -> JS: furigana token from Kuromoji. */
+/** Kotlin -> JS: furigana token with section-local layout offsets. */
 export interface RubyToken {
   surface: string;
   reading: string;
+  start: number;
+  end: number;
 }
 
 /** Public API exposed as `window.NatsuReader`. */

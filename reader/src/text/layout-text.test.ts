@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractLayoutText, layoutOffsetAtRange } from "./layout-text.js";
+import { extractLayoutText, layoutOffsetAtRange, layoutRangeForSpan } from "./layout-text.js";
 
 describe("extractLayoutText", () => {
   it("skips rt readings and preserves br newlines", () => {
@@ -33,5 +33,16 @@ describe("layoutOffsetAtRange", () => {
     range.collapse(true);
 
     expect(layoutOffsetAtRange(paragraph, range)).toBe(2);
+  });
+});
+
+describe("layoutRangeForSpan", () => {
+  it("maps a span across br boundaries to DOM range endpoints", () => {
+    document.body.innerHTML = "<p id=\"p\">あ<br>い</p>";
+    const paragraph = document.getElementById("p")!;
+
+    const range = layoutRangeForSpan(paragraph, 0, 3);
+    expect(range).not.toBeNull();
+    expect(extractLayoutText(paragraph)).toBe("あ\nい");
   });
 });

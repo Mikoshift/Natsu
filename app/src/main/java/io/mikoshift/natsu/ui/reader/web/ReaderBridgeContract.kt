@@ -16,7 +16,7 @@ package io.mikoshift.natsu.ui.reader.web
  * - `NatsuReader.init()` — install listeners; runs after bridge.js loads.
  * - `NatsuReader.applyTheme(vars)` — CSS variables: fontSizePx, lineHeight, backgroundColor, textColor.
  * - `NatsuReader.highlightSearch(ranges)` — `[{start, end}]` section-local char offsets.
- * - `NatsuReader.injectRuby(tokens)` — `[{surface, reading}]` for Kuromoji furigana.
+ * - `NatsuReader.injectRuby(tokens)` — `[{surface, reading, start, end}]` section-local layout offsets.
  * - `NatsuReader.scrollToOffset(charOffset)` — scroll to section-local char offset.
  *
  * Kuromoji tokenization stays in Kotlin. JS only handles DOM extraction and decoration.

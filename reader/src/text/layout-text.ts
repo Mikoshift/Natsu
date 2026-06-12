@@ -58,6 +58,50 @@ export function layoutRangeAtOffset(root: Node, targetOffset: number): Range | n
   return result;
 }
 
+export interface LayoutTextSegment {
+  node: Text;
+  localStart: number;
+  localEnd: number;
+}
+
+/** Layout-text segments overlapping `[start, end)` — text nodes only, skips `<br>`. */
+export function layoutSegmentsForRange(root: Node, start: number, end: number): LayoutTextSegment[] {
+  if (start >= end) {
+    return [];
+  }
+  const segments: LayoutTextSegment[] = [];
+  let current = 0;
+
+  walkLayout(root, root, (chunk, meta) => {
+    const chunkStart = current;
+    const chunkEnd = current + chunk.length;
+    if (meta?.kind === "text" && end > chunkStart && start < chunkEnd) {
+      segments.push({
+        node: meta.node,
+        localStart: Math.max(0, start - chunkStart),
+        localEnd: Math.min(chunk.length, end - chunkStart),
+      });
+    }
+    current = chunkEnd;
+  });
+
+  return segments;
+}
+
+/** Collapsed DOM range for a layout-text span `[start, end)`. */
+export function layoutRangeForSpan(root: Node, start: number, end: number): Range | null {
+  const segments = layoutSegmentsForRange(root, start, end);
+  if (segments.length === 0) {
+    return null;
+  }
+  const first = segments[0];
+  const last = segments[segments.length - 1];
+  const range = document.createRange();
+  range.setStart(first.node, rawOffsetForVisibleIndex(first.node, first.localStart));
+  range.setEnd(last.node, rawOffsetForVisibleIndex(last.node, last.localEnd));
+  return range;
+}
+
 type LayoutChunkMeta =
   | { kind: "text"; node: Text }
   | { kind: "newline" };
@@ -116,6 +160,11 @@ function visibleOffsetInTextNode(node: Text, rawOffset: number): number {
     }
   }
   return visible;
+}
+
+/** Maps a visible character index inside [node] to a raw DOM offset. */
+export function visibleToRawOffset(node: Text, visibleOffset: number): number {
+  return rawOffsetForVisibleIndex(node, visibleOffset);
 }
 
 function rawOffsetForVisibleIndex(node: Text, visibleIndex: number): number {
