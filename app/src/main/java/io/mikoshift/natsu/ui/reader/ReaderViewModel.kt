@@ -44,10 +44,12 @@ data class SearchHighlight(
 
 data class ReaderUiState(
     val document: Document? = null,
-    val paragraphs: List<List<TextToken>> = emptyList(),
+    val displayItems: List<ReaderDisplayItem> = emptyList(),
+    val sectionNavItems: List<ReaderSectionNav> = emptyList(),
     val isLoading: Boolean = true,
     val errorMessage: String? = null,
-    val scrollToIndex: Int = 0,
+    val scrollToDisplayIndex: Int = 0,
+    val scrollRequestId: Long = 0L,
     val paragraphStartOffsets: List<Int> = emptyList(),
     val wordLookup: WordLookupState = WordLookupState.Hidden,
     val searchActive: Boolean = false,
@@ -94,14 +96,20 @@ class ReaderViewModel(
                 return@launch
             }
 
-            readingContentRepository.loadLayout(documentId)
-                .onSuccess { layout ->
+            readingContentRepository.loadReadingContent(documentId)
+                .onSuccess { content ->
+                    val layout = content.layout
                     rawText = layout.canonicalText
                     documentRepository.ensureCharCount(documentId, layout.canonicalText.length)
                     val tokenized = withContext(Dispatchers.Default) {
                         textTokenizer.tokenizeParagraphs(layout.paragraphs)
                     }
-                    val scrollIndex = when {
+                    val displayItems = ReaderDisplayBuilder.buildItems(
+                        book = content.book,
+                        bookStoragePath = document.storagePath,
+                        tokenizedParagraphs = tokenized,
+                    )
+                    val scrollLayoutIndex = when {
                         document.lastReadCharOffset > 0 ->
                             layout.paragraphIndexForCharOffset(document.lastReadCharOffset)
                         document.lastReadParagraphIndex > 0 ->
@@ -110,14 +118,23 @@ class ReaderViewModel(
                             )
                         else -> 0
                     }
+                    val scrollDisplayIndex = ReaderDisplayBuilder.displayIndexForLayoutParagraph(
+                        items = displayItems,
+                        layoutParagraphIndex = scrollLayoutIndex,
+                    )
                     lastSavedCharOffset = document.lastReadCharOffset
                     lastSavedParagraphIndex = document.lastReadParagraphIndex
                     _uiState.update {
                         it.copy(
                             document = document,
-                            paragraphs = tokenized,
+                            displayItems = displayItems,
+                            sectionNavItems = ReaderDisplayBuilder.buildSectionNav(
+                                book = content.book,
+                                layout = layout,
+                            ),
                             isLoading = false,
-                            scrollToIndex = scrollIndex,
+                            scrollToDisplayIndex = scrollDisplayIndex,
+                            scrollRequestId = it.scrollRequestId + 1,
                             paragraphStartOffsets = layout.paragraphStartOffsets,
                         )
                     }
@@ -130,6 +147,19 @@ class ReaderViewModel(
                         )
                     }
                 }
+        }
+    }
+
+    fun navigateToSection(section: ReaderSectionNav) {
+        val displayIndex = ReaderDisplayBuilder.displayIndexForLayoutParagraph(
+            items = _uiState.value.displayItems,
+            layoutParagraphIndex = section.startLayoutParagraphIndex,
+        )
+        _uiState.update {
+            it.copy(
+                scrollToDisplayIndex = displayIndex,
+                scrollRequestId = it.scrollRequestId + 1,
+            )
         }
     }
 
@@ -266,16 +296,20 @@ class ReaderViewModel(
         return if (index >= 0) index else 0
     }
 
-    fun saveReadingPosition(paragraphIndex: Int, immediate: Boolean = false) {
+    fun saveReadingPosition(displayIndex: Int, immediate: Boolean = false) {
         val state = _uiState.value
         val documentId = state.document?.id ?: return
-        if (state.paragraphs.isEmpty()) return
+        if (state.displayItems.isEmpty()) return
 
-        val safeIndex = paragraphIndex.coerceIn(0, state.paragraphs.lastIndex)
-        val charOffset = state.paragraphStartOffsets.getOrElse(safeIndex) { 0 }
+        val safeDisplayIndex = displayIndex.coerceIn(0, state.displayItems.lastIndex)
+        val layoutParagraphIndex = ReaderDisplayBuilder.layoutParagraphForDisplayIndex(
+            items = state.displayItems,
+            displayIndex = safeDisplayIndex,
+        )
+        val charOffset = state.paragraphStartOffsets.getOrElse(layoutParagraphIndex) { 0 }
         if (!immediate &&
             charOffset == lastSavedCharOffset &&
-            safeIndex == lastSavedParagraphIndex
+            layoutParagraphIndex == lastSavedParagraphIndex
         ) {
             return
         }
@@ -288,26 +322,30 @@ class ReaderViewModel(
             persistReadingPosition(
                 documentId = documentId,
                 charOffset = charOffset,
-                paragraphIndex = safeIndex,
+                paragraphIndex = layoutParagraphIndex,
                 notifyLibrary = immediate,
             )
         }
     }
 
-    fun flushReadingPosition(paragraphIndex: Int) {
+    fun flushReadingPosition(displayIndex: Int) {
         saveJob?.cancel()
         val state = _uiState.value
         val documentId = state.document?.id ?: return
-        if (state.paragraphs.isEmpty()) return
+        if (state.displayItems.isEmpty()) return
 
-        val safeIndex = paragraphIndex.coerceIn(0, state.paragraphs.lastIndex)
-        val charOffset = state.paragraphStartOffsets.getOrElse(safeIndex) { 0 }
+        val safeDisplayIndex = displayIndex.coerceIn(0, state.displayItems.lastIndex)
+        val layoutParagraphIndex = ReaderDisplayBuilder.layoutParagraphForDisplayIndex(
+            items = state.displayItems,
+            displayIndex = safeDisplayIndex,
+        )
+        val charOffset = state.paragraphStartOffsets.getOrElse(layoutParagraphIndex) { 0 }
 
         viewModelScope.launch {
             persistReadingPosition(
                 documentId = documentId,
                 charOffset = charOffset,
-                paragraphIndex = safeIndex,
+                paragraphIndex = layoutParagraphIndex,
                 notifyLibrary = true,
             )
         }

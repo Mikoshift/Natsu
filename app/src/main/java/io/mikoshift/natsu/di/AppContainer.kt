@@ -6,8 +6,10 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.CreationExtras
 import io.mikoshift.natsu.data.book.BookImportCoordinator
 import io.mikoshift.natsu.data.book.BookStorage
+import io.mikoshift.natsu.data.book.import.MarkdownBookImporter
 import io.mikoshift.natsu.data.book.import.PlainTextBookImporter
 import io.mikoshift.natsu.data.book.load.ManifestReadingContentLoader
+import io.mikoshift.natsu.data.book.load.MarkdownFormatLoader
 import io.mikoshift.natsu.data.book.load.PlainTextFormatLoader
 import io.mikoshift.natsu.data.dictionary.DictionaryCatalogLoader
 import io.mikoshift.natsu.data.dictionary.DictionaryDownloadManager
@@ -39,6 +41,10 @@ class AppContainer(context: Context) {
     private val bookImportCoordinator: BookImportCoordinator by lazy {
         BookImportCoordinator(
             importers = listOf(
+                MarkdownBookImporter(
+                    context = appContext,
+                    bookStorage = bookStorage,
+                ),
                 PlainTextBookImporter(
                     context = appContext,
                     bookStorage = bookStorage,
@@ -49,7 +55,10 @@ class AppContainer(context: Context) {
     private val manifestReadingContentLoader: ManifestReadingContentLoader by lazy {
         ManifestReadingContentLoader(
             bookStorage = bookStorage,
-            formatLoaders = listOf(PlainTextFormatLoader()),
+            formatLoaders = listOf(
+                PlainTextFormatLoader(),
+                MarkdownFormatLoader(),
+            ),
         )
     }
     private val readingLayoutBuilder: ReadingLayoutBuilder by lazy { ReadingLayoutBuilder() }

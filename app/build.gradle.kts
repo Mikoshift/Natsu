@@ -62,6 +62,8 @@ dependencies {
     implementation(libs.gson)
     implementation(libs.okhttp)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.commonmark)
+    implementation(libs.coil.compose)
     testImplementation(libs.junit)
     testImplementation("org.json:json:20240303")
     androidTestImplementation(platform(libs.androidx.compose.bom))

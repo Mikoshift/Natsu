@@ -1,7 +1,9 @@
 package io.mikoshift.natsu.data.book.load
 
 import io.mikoshift.natsu.data.book.BookStorage
+import io.mikoshift.natsu.domain.model.reading.BookFormat
 import kotlinx.coroutines.runBlocking
+import java.nio.charset.StandardCharsets
 import org.junit.Test
 import java.io.File
 
@@ -71,6 +73,46 @@ class LoaderContractTest {
         LoaderContract.verify(
             book = book,
             searchQueries = listOf("猫", "は", "名前"),
+        )
+    }
+
+    @Test
+    fun markdownLoader_satisfiesContract_withHeadingsAndImage() = runBlocking {
+        val booksRoot = createBooksRoot()
+        val sections = listOf(
+            LoaderTestSection(
+                id = "main",
+                path = BookStorage.MARKDOWN_CONTENT_PATH,
+                content = """
+                # Chapter
+
+                Body with 猫.
+
+                ![Cover](images/cover.png)
+                """.trimIndent(),
+            ),
+        )
+        val bookDir = LoaderTestBooks.createBookPackage(
+            booksRoot = booksRoot,
+            format = BookFormat.Markdown,
+            sections = sections,
+        )
+        java.io.File(bookDir, "images/cover.png").apply {
+            parentFile?.mkdirs()
+            writeText("png", StandardCharsets.UTF_8)
+        }
+        val book = ManifestReadingContentLoader(
+            bookStorage = io.mikoshift.natsu.data.book.BookStorage(booksRoot),
+            formatLoaders = listOf(MarkdownFormatLoader()),
+        ).load(
+            documentId = "book-1",
+            storagePath = bookDir.absolutePath,
+            title = "Test Book",
+        ).getOrThrow()
+
+        LoaderContract.verify(
+            book = book,
+            searchQueries = listOf("Chapter", "猫"),
         )
     }
 

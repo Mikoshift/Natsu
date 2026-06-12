@@ -2,6 +2,7 @@ package io.mikoshift.natsu.domain.model.reading
 
 enum class BookFormat(val manifestValue: String) {
     PlainText("plain_text"),
+    Markdown("markdown"),
     ;
 
     companion object {

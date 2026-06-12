@@ -9,8 +9,11 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -50,16 +53,16 @@ fun ReaderScreen(
     val listState = rememberLazyListState()
     val contentReady = !uiState.isLoading &&
         uiState.errorMessage == null &&
-        uiState.paragraphs.isNotEmpty()
+        uiState.displayItems.isNotEmpty()
 
     LaunchedEffect(documentId) {
         viewModel.loadDocument(documentId)
     }
 
-    LaunchedEffect(contentReady, uiState.scrollToIndex) {
-        if (contentReady && uiState.scrollToIndex > 0) {
+    LaunchedEffect(contentReady, uiState.scrollToDisplayIndex, uiState.scrollRequestId) {
+        if (contentReady && uiState.scrollToDisplayIndex > 0) {
             listState.scrollToItem(
-                uiState.scrollToIndex.coerceAtMost(uiState.paragraphs.lastIndex),
+                uiState.scrollToDisplayIndex.coerceAtMost(uiState.displayItems.lastIndex),
             )
         }
     }
@@ -71,15 +74,17 @@ fun ReaderScreen(
         if (!contentReady) return@LaunchedEffect
 
         highlightCenterY = null
-        listState.scrollToItem(
-            highlight.paragraphIndex.coerceAtMost(uiState.paragraphs.lastIndex),
+        val displayIndex = ReaderDisplayBuilder.displayIndexForLayoutParagraph(
+            items = uiState.displayItems,
+            layoutParagraphIndex = highlight.paragraphIndex,
         )
+        listState.scrollToItem(displayIndex.coerceAtMost(uiState.displayItems.lastIndex))
         val centerY = snapshotFlow { highlightCenterY }
             .filterNotNull()
             .first()
         val viewportHeight = listState.layoutInfo.viewportSize.height
         val scrollOffset = (centerY - viewportHeight / 2f).toInt().coerceAtLeast(0)
-        listState.animateScrollToItem(highlight.paragraphIndex, scrollOffset)
+        listState.animateScrollToItem(displayIndex, scrollOffset)
     }
 
     LaunchedEffect(contentReady, listState) {
@@ -93,12 +98,14 @@ fun ReaderScreen(
         onDispose {
             if (contentReady) {
                 viewModel.saveReadingPosition(
-                    paragraphIndex = listState.firstVisibleItemIndex,
+                    displayIndex = listState.firstVisibleItemIndex,
                     immediate = true,
                 )
             }
         }
     }
+
+    var sectionMenuExpanded by remember { mutableStateOf(false) }
 
     ReaderThemeWrapper(settings = readerSettings) {
         Scaffold(
@@ -139,6 +146,30 @@ fun ReaderScreen(
                     },
                     actions = {
                         if (!uiState.searchActive && contentReady) {
+                            if (uiState.sectionNavItems.isNotEmpty()) {
+                                Box {
+                                    IconButton(onClick = { sectionMenuExpanded = true }) {
+                                        Icon(
+                                            Icons.Default.List,
+                                            contentDescription = stringResource(R.string.reader_sections),
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = sectionMenuExpanded,
+                                        onDismissRequest = { sectionMenuExpanded = false },
+                                    ) {
+                                        uiState.sectionNavItems.forEach { section ->
+                                            DropdownMenuItem(
+                                                text = { Text(section.title) },
+                                                onClick = {
+                                                    sectionMenuExpanded = false
+                                                    viewModel.navigateToSection(section)
+                                                },
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                             IconButton(onClick = viewModel::openSearch) {
                                 Icon(
                                     Icons.Default.Search,
@@ -173,22 +204,41 @@ fun ReaderScreen(
                             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                         ) {
                             itemsIndexed(
-                                items = uiState.paragraphs,
+                                items = uiState.displayItems,
                                 key = { index, _ -> index },
-                            ) { index, tokens ->
+                            ) { index, item ->
                                 val highlight = uiState.searchHighlight
-                                    ?.takeIf { it.paragraphIndex == index }
-                                TokenizedParagraph(
-                                    tokens = tokens,
-                                    settings = readerSettings,
-                                    onWordClick = viewModel::onWordClicked,
-                                    highlightRange = highlight?.range,
-                                    onHighlightPositioned = if (highlight != null) {
-                                        { y -> highlightCenterY = y }
-                                    } else {
-                                        null
-                                    },
-                                )
+                                    ?.takeIf { it.paragraphIndex == item.layoutParagraphIndex }
+                                when (val content = item.content) {
+                                    is ReaderBlockContent.Paragraph -> {
+                                        TokenizedParagraph(
+                                            tokens = content.tokens,
+                                            settings = readerSettings,
+                                            onWordClick = viewModel::onWordClicked,
+                                            highlightRange = highlight?.range,
+                                            onHighlightPositioned = if (highlight != null) {
+                                                { y -> highlightCenterY = y }
+                                            } else {
+                                                null
+                                            },
+                                        )
+                                    }
+                                    is ReaderBlockContent.Heading -> {
+                                        ReaderHeading(
+                                            text = content.text,
+                                            level = content.level,
+                                            settings = readerSettings,
+                                            highlightRange = highlight?.range,
+                                        )
+                                    }
+                                    is ReaderBlockContent.Image -> {
+                                        ReaderImage(
+                                            source = content.source,
+                                            alt = content.alt,
+                                            bookStoragePath = content.bookStoragePath,
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

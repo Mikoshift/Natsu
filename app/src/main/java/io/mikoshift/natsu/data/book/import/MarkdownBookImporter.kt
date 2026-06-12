@@ -10,17 +10,15 @@ import io.mikoshift.natsu.domain.model.reading.ManifestSection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-class PlainTextBookImporter(
+class MarkdownBookImporter(
     private val context: Context,
     private val bookStorage: BookStorage,
 ) : BookImporter {
-    override val format: BookFormat = BookFormat.PlainText
+    override val format: BookFormat = BookFormat.Markdown
 
     override fun canImport(fileName: String, mimeType: String?): Boolean {
         val extension = fileName.substringAfterLast('.', "").lowercase()
-        if (extension in MARKDOWN_EXTENSIONS) return false
-        if (mimeType != null && mimeType.startsWith("text/")) return true
-        return extension in SUPPORTED_EXTENSIONS || extension.isEmpty()
+        return extension in SUPPORTED_EXTENSIONS
     }
 
     override suspend fun import(uri: Uri, displayName: String?): Result<ImportedBookPackage> =
@@ -31,20 +29,20 @@ class PlainTextBookImporter(
                 val bookDir = bookStorage.createBookDirectory()
                 bookStorage.writeContentFile(
                     bookDir = bookDir,
-                    relativePath = BookStorage.PLAIN_TEXT_CONTENT_PATH,
+                    relativePath = BookStorage.MARKDOWN_CONTENT_PATH,
                     content = content,
                 )
                 bookStorage.writeManifest(
                     bookDir = bookDir,
                     manifest = BookManifest(
                         version = MANIFEST_VERSION,
-                        format = BookFormat.PlainText,
+                        format = BookFormat.Markdown,
                         title = title,
                         sections = listOf(
                             ManifestSection(
                                 id = MAIN_SECTION_ID,
                                 title = null,
-                                path = BookStorage.PLAIN_TEXT_CONTENT_PATH,
+                                path = BookStorage.MARKDOWN_CONTENT_PATH,
                             ),
                         ),
                     ),
@@ -53,7 +51,7 @@ class PlainTextBookImporter(
                     id = bookDir.name,
                     title = title,
                     storagePath = bookDir.absolutePath,
-                    sourceFormat = BookFormat.PlainText,
+                    sourceFormat = BookFormat.Markdown,
                     importedAt = System.currentTimeMillis(),
                 )
             }
@@ -62,7 +60,6 @@ class PlainTextBookImporter(
     companion object {
         private const val MANIFEST_VERSION = 1
         private const val MAIN_SECTION_ID = "main"
-        private val SUPPORTED_EXTENSIONS = setOf("txt", "text")
-        private val MARKDOWN_EXTENSIONS = setOf("md", "markdown")
+        private val SUPPORTED_EXTENSIONS = setOf("md", "markdown")
     }
 }

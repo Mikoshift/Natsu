@@ -5,7 +5,7 @@ import io.mikoshift.natsu.data.book.BookStorage
 import io.mikoshift.natsu.data.book.load.ManifestReadingContentLoader
 import io.mikoshift.natsu.data.local.DocumentLocalStore
 import io.mikoshift.natsu.data.reader.ReadingLayoutBuilder
-import io.mikoshift.natsu.domain.model.Document
+import io.mikoshift.natsu.domain.model.reading.ReadingContent
 import io.mikoshift.natsu.domain.repository.ReadingContentRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -16,7 +16,7 @@ class ReadingContentRepositoryImpl(
     private val readingLayoutBuilder: ReadingLayoutBuilder,
 ) : ReadingContentRepository {
 
-    override suspend fun loadLayout(documentId: String) =
+    override suspend fun loadReadingContent(documentId: String) =
         withContext(Dispatchers.IO) {
             runCatching {
                 val document = documentLocalStore.getById(documentId)
@@ -26,7 +26,10 @@ class ReadingContentRepositoryImpl(
                     storagePath = document.storagePath,
                     title = document.title,
                 ).getOrThrow()
-                readingLayoutBuilder.build(readingBook)
+                ReadingContent(
+                    book = readingBook,
+                    layout = readingLayoutBuilder.build(readingBook),
+                )
             }
         }
 }

@@ -60,6 +60,7 @@ class BookStorage private constructor(
     companion object {
         const val MANIFEST_FILE_NAME = "manifest.json"
         const val PLAIN_TEXT_CONTENT_PATH = "content.txt"
+        const val MARKDOWN_CONTENT_PATH = "content.md"
     }
 }
 
