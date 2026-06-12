@@ -1,11 +1,7 @@
 import { innerTextOffsetInParagraph } from "./offset.js";
 
 function findTextNodeInElement(element) {
-  const walker = document.createTreeWalker(
-    element,
-    NodeFilter.SHOW_TEXT,
-    null,
-  );
+  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
   return walker.nextNode();
 }
 

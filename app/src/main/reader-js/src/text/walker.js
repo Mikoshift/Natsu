@@ -5,10 +5,7 @@ export function collectTextRoot() {
 export function isInsideTag(node, root, tagName) {
   let parent = node.parentNode;
   while (parent && parent !== root) {
-    if (
-      parent.nodeType === Node.ELEMENT_NODE &&
-      parent.tagName.toLowerCase() === tagName
-    ) {
+    if (parent.nodeType === Node.ELEMENT_NODE && parent.tagName.toLowerCase() === tagName) {
       return true;
     }
     parent = parent.parentNode;

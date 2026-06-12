@@ -3,10 +3,7 @@ import { charOffsetToPoint, innerTextOffsetInParagraph } from "./offset.js";
 
 describe("innerTextOffsetInParagraph", () => {
   it("counts visible text and skips rt readings", () => {
-    document.body.innerHTML =
-      "<p id=\"p\">" +
-      "漢<ruby><rb>字</rb><rt>じ</rt></ruby>テスト" +
-      "</p>";
+    document.body.innerHTML = '<p id="p">' + "漢<ruby><rb>字</rb><rt>じ</rt></ruby>テスト" + "</p>";
     const paragraph = document.getElementById("p");
     const rbNode = paragraph.querySelector("rb").firstChild;
     const range = document.createRange();
@@ -20,9 +17,7 @@ describe("innerTextOffsetInParagraph", () => {
 describe("charOffsetToPoint", () => {
   it("maps visible offsets skipping rt text", () => {
     document.body.innerHTML =
-      "<div id=\"root\">" +
-      "あ<ruby><rb>い</rb><rt>イ</rt></ruby>う" +
-      "</div>";
+      '<div id="root">' + "あ<ruby><rb>い</rb><rt>イ</rt></ruby>う" + "</div>";
     const root = document.getElementById("root");
 
     const atSecondVisible = charOffsetToPoint(root, 1);
