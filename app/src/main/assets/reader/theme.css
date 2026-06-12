@@ -23,7 +23,8 @@ body.natsu-chapter {
   font-family: sans-serif;
   font-size: var(--natsu-font-size);
   line-height: var(--natsu-line-height);
-  padding: 16px calc(20px + env(safe-area-inset-right, 0px)) calc(40px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
+  padding: 16px calc(20px + env(safe-area-inset-right, 0px))
+    calc(40px + env(safe-area-inset-bottom, 0px)) calc(20px + env(safe-area-inset-left, 0px));
   -webkit-text-size-adjust: 100%;
   word-break: normal;
   overflow-wrap: anywhere;

@@ -56,21 +56,21 @@ android {
 val compileReaderJs = tasks.register<Exec>("compileReaderJs") {
     group = "build"
     description = "Bundle reader WebView JavaScript assets"
-    workingDir = file("src/main/reader-js")
+    workingDir = rootProject.projectDir
     val isWindows = System.getProperty("os.name").lowercase().contains("windows")
     commandLine(
         if (isWindows) {
-            listOf("cmd", "/c", "npm install && npm run build")
+            listOf("cmd", "/c", "npm install && npm run reader:build")
         } else {
-            listOf("sh", "-c", "npm install && npm run build")
+            listOf("sh", "-c", "npm install && npm run reader:build")
         },
     )
-    inputs.dir(file("src/main/reader-js/src"))
+    inputs.dir(rootProject.file("reader-js/src"))
     inputs.files(
-        file("src/main/reader-js/package.json"),
-        file("src/main/reader-js/package-lock.json"),
-        file("src/main/reader-js/esbuild.config.mjs"),
-        file("src/main/reader-js/theme.css"),
+        rootProject.file("package.json"),
+        rootProject.file("package-lock.json"),
+        rootProject.file("reader-js/esbuild.config.mjs"),
+        rootProject.file("reader-js/theme.css"),
     )
     outputs.files(
         file("src/main/assets/reader/bridge.js"),

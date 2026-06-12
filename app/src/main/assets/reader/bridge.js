@@ -1,5 +1,5 @@
 (() => {
-  // src/native-bridge.js
+  // reader-js/src/native-bridge.js
   var BRIDGE_NAME = "NatsuBridge";
   function bridge() {
     return window[BRIDGE_NAME];
@@ -11,7 +11,7 @@
     }
   }
 
-  // src/text/walker.js
+  // reader-js/src/text/walker.js
   function collectTextRoot() {
     return document.body || document.documentElement;
   }
@@ -48,7 +48,7 @@
     });
   }
 
-  // src/text/offset.js
+  // reader-js/src/text/offset.js
   function charOffsetInParagraph(paragraph, range) {
     const pre = document.createRange();
     pre.selectNodeContents(paragraph);
@@ -95,13 +95,9 @@
     return null;
   }
 
-  // src/text/range-from-point.js
+  // reader-js/src/text/range-from-point.js
   function findTextNodeInElement(element) {
-    const walker = document.createTreeWalker(
-      element,
-      NodeFilter.SHOW_TEXT,
-      null
-    );
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT, null);
     return walker.nextNode();
   }
   function findParagraphElement(node) {
@@ -159,7 +155,7 @@
     };
   }
 
-  // src/events.js
+  // reader-js/src/events.js
   var SCROLL_THROTTLE_MS = 400;
   var TAP_MOVE_THRESHOLD_PX = 10;
   var TAP_CLICK_SUPPRESS_MS = 400;
@@ -231,7 +227,7 @@
     window.addEventListener("scroll", notifyScrollProgress, { passive: true });
   }
 
-  // src/features/highlight.js
+  // reader-js/src/features/highlight.js
   function clearHighlights() {
     document.querySelectorAll("mark.natsu-search-highlight").forEach((mark) => {
       const parent = mark.parentNode;
@@ -298,7 +294,7 @@
     });
   }
 
-  // src/features/ruby.js
+  // reader-js/src/features/ruby.js
   function injectRuby(tokens) {
     if (!tokens || !tokens.length) {
       return;
@@ -346,7 +342,7 @@
     });
   }
 
-  // src/features/scroll.js
+  // reader-js/src/features/scroll.js
   function scrollToOffset(charOffset) {
     const root = collectTextRoot();
     const range = charOffsetToPoint(root, charOffset);
@@ -358,7 +354,7 @@
     window.scrollTo({ top: Math.max(0, targetTop), behavior: "auto" });
   }
 
-  // src/messages.js
+  // reader-js/src/messages.js
   var WEB_MESSAGE_TYPE = "natsu-reader-call";
   function installMessageListener(api) {
     window.addEventListener("message", (event) => {
@@ -388,7 +384,7 @@
     }
   }
 
-  // src/theme.js
+  // reader-js/src/theme.js
   function applyTheme(vars) {
     if (!vars) {
       return;
@@ -419,7 +415,7 @@
     }
   }
 
-  // src/index.js
+  // reader-js/src/index.js
   (function() {
     "use strict";
     const reader = {

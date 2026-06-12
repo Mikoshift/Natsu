@@ -1,9 +1,12 @@
 import js from "@eslint/js";
 
 export default [
+  {
+    ignores: ["node_modules/**", "app/src/main/assets/**"],
+  },
   js.configs.recommended,
   {
-    files: ["src/**/*.js"],
+    files: ["reader-js/src/**/*.js"],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: "module",
@@ -24,7 +27,11 @@ export default [
     },
   },
   {
-    files: ["**/*.config.{js,mjs}", "vitest.config.mjs"],
+    files: [
+      "reader-js/**/*.config.{js,mjs}",
+      "reader-js/vitest.config.mjs",
+      "eslint.config.js",
+    ],
     languageOptions: {
       ecmaVersion: 2020,
       sourceType: "module",

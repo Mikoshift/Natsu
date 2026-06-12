@@ -1,0 +1,21 @@
+{
+  "name": "natsu",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "reader:build": "node reader-js/esbuild.config.mjs",
+    "reader:test": "vitest run --config reader-js/vitest.config.mjs",
+    "reader:lint": "eslint reader-js/src/",
+    "reader:lint:fix": "eslint reader-js/src/ --fix",
+    "reader:format": "prettier --write reader-js/",
+    "reader:format:check": "prettier --check reader-js/"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "esbuild": "^0.25.0",
+    "eslint": "^10.4.1",
+    "jsdom": "^26.0.0",
+    "prettier": "^3.8.4",
+    "vitest": "^3.0.0"
+  }
+}
