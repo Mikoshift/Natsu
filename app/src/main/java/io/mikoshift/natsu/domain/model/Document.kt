@@ -15,6 +15,9 @@ data class Document(
     /** Legacy fallback when [lastReadLocator] and [lastReadCharOffset] are unset. */
     val lastReadParagraphIndex: Int,
     val lastReadLocator: ReadingLocator? = null,
+    val updatedAtMs: Long = 0L,
+    val syncDirty: Boolean = false,
+    val deleted: Boolean = false,
 )
 
 fun Document.hasReadingProgress(): Boolean =

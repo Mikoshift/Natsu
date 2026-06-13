@@ -1,10 +1,34 @@
 import org.gradle.testing.jacoco.tasks.JacocoReport
+import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     jacoco
 }
+
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.inputStream().use { localProperties.load(it) }
+}
+
+fun localProperty(key: String, defaultValue: String): String =
+    localProperties.getProperty(key)?.trim().orEmpty().ifEmpty { defaultValue }
+
+fun gradleProperty(key: String, defaultValue: String): String =
+    providers.gradleProperty(key).orNull?.trim()?.takeIf { it.isNotEmpty() } ?: defaultValue
+
+val apiPort = localProperty("api.port", gradleProperty("natsu.api.port", "8000"))
+val apiHost = localProperty("api.host", gradleProperty("natsu.api.host", "127.0.0.1"))
+val debugApiBaseUrl = localProperty(
+    "api.base.url",
+    "http://$apiHost:$apiPort/api/v1/",
+)
+val releaseApiBaseUrl = localProperty(
+    "api.base.url.release",
+    gradleProperty("natsu.api.base.url.release", "https://natsu.example.com/api/v1/"),
+)
 
 android {
     namespace = "io.mikoshift.natsu"
@@ -25,11 +49,21 @@ android {
     buildTypes {
         debug {
             enableUnitTestCoverage = true
+            buildConfigField(
+                "String",
+                "API_BASE_URL",
+                "\"$debugApiBaseUrl\"",
+            )
         }
         release {
             optimization {
                 enable = false
             }
+            buildConfigField(
+                "String",
+                "API_BASE_URL",
+                "\"$releaseApiBaseUrl\"",
+            )
         }
     }
     compileOptions {
@@ -39,6 +73,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     packaging {
         resources {
@@ -156,6 +191,7 @@ dependencies {
     implementation(libs.readium.streamer)
     implementation(libs.jsoup)
     implementation(libs.androidx.webkit)
+    implementation(libs.androidx.work.runtime.ktx)
     coreLibraryDesugaring(libs.desugar.jdk.libs)
     testImplementation(libs.junit)
     testImplementation("org.json:json:20260522")
@@ -165,4 +201,18 @@ dependencies {
     androidTestImplementation(libs.androidx.junit)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
+}
+
+val adbExecutable = localProperty("sdk.dir", "")
+    .let { sdkDir -> if (sdkDir.isEmpty()) "adb" else "$sdkDir/platform-tools/adb" }
+
+tasks.register<Exec>("adbReverseApi") {
+    group = "android"
+    description = "Forward host API port to emulator localhost (debug)"
+    commandLine(adbExecutable, "reverse", "tcp:$apiPort", "tcp:$apiPort")
+    isIgnoreExitValue = true
+}
+
+tasks.matching { it.name == "installDebug" }.configureEach {
+    dependsOn("adbReverseApi")
 }

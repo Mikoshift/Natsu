@@ -31,7 +31,7 @@ class DocumentRepositoryImpl(
     }
 
     override suspend fun getDocument(id: String): Document? =
-        documentLocalStore.getById(id)
+        documentLocalStore.getById(id)?.takeUnless { it.deleted }
 
     override suspend fun importBook(
         uri: android.net.Uri,
@@ -70,6 +70,7 @@ class DocumentRepositoryImpl(
                 val trimmed = title.trim()
                 require(trimmed.isNotEmpty()) { "Title cannot be empty" }
                 documentLocalStore.getById(id)
+                    ?.takeUnless { it.deleted }
                     ?: throw NoSuchElementException("Document not found")
                 documentLocalStore.updateTitle(id, trimmed)
                 Unit

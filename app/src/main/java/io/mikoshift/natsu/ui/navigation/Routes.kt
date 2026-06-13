@@ -4,6 +4,7 @@ object Routes {
     const val LIBRARY = "library"
     const val DICTIONARIES = "dictionaries"
     const val SETTINGS = "settings"
+    const val AUTH = "auth"
     const val READER = "reader/{documentId}"
 
     fun reader(documentId: String): String = "reader/$documentId"

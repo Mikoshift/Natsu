@@ -30,11 +30,31 @@ class DocumentLocalStore(context: Context) {
             db.query(
                 TABLE,
                 DOCUMENT_COLUMNS,
-                null,
+                "deleted = 0",
                 null,
                 null,
                 null,
                 "imported_at DESC",
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(cursor.toDocument())
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun getDirtyDocuments(): List<Document> = withContext(Dispatchers.IO) {
+        helper.readableDatabase.use { db ->
+            db.query(
+                TABLE,
+                DOCUMENT_COLUMNS,
+                "sync_dirty = 1",
+                null,
+                null,
+                null,
+                "updated_at_ms ASC",
             ).use { cursor ->
                 buildList {
                     while (cursor.moveToNext()) {
@@ -63,12 +83,31 @@ class DocumentLocalStore(context: Context) {
     }
 
     suspend fun insert(document: Document) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val stored = document.copy(
+            updatedAtMs = if (document.updatedAtMs > 0L) document.updatedAtMs else now,
+            syncDirty = true,
+        )
         writeMutex.withLock {
             helper.writableDatabase.use { db ->
                 db.insertWithOnConflict(
                     TABLE,
                     null,
-                    document.toContentValues(),
+                    stored.toContentValues(),
+                    SQLiteDatabase.CONFLICT_REPLACE,
+                )
+            }
+        }
+        changes.tryEmit(Unit)
+    }
+
+    suspend fun upsertFromSync(document: Document) = withContext(Dispatchers.IO) {
+        writeMutex.withLock {
+            helper.writableDatabase.use { db ->
+                db.insertWithOnConflict(
+                    TABLE,
+                    null,
+                    document.copy(syncDirty = false).toContentValues(),
                     SQLiteDatabase.CONFLICT_REPLACE,
                 )
             }
@@ -77,27 +116,21 @@ class DocumentLocalStore(context: Context) {
     }
 
     suspend fun updateTitle(id: String, title: String) = withContext(Dispatchers.IO) {
-        writeMutex.withLock {
-            helper.writableDatabase.use { db ->
-                db.execSQL(
-                    "UPDATE $TABLE SET title = ? WHERE id = ?",
-                    arrayOf<Any>(title, id),
-                )
-            }
+        markDirty(id) { db ->
+            db.execSQL(
+                "UPDATE $TABLE SET title = ? WHERE id = ?",
+                arrayOf<Any>(title, id),
+            )
         }
-        changes.tryEmit(Unit)
     }
 
     suspend fun updateCharCount(id: String, charCount: Int) = withContext(Dispatchers.IO) {
-        writeMutex.withLock {
-            helper.writableDatabase.use { db ->
-                db.execSQL(
-                    "UPDATE $TABLE SET char_count = ? WHERE id = ?",
-                    arrayOf<Any>(charCount, id),
-                )
-            }
+        markDirty(id) { db ->
+            db.execSQL(
+                "UPDATE $TABLE SET char_count = ? WHERE id = ?",
+                arrayOf<Any>(charCount, id),
+            )
         }
-        changes.tryEmit(Unit)
     }
 
     suspend fun updateReadingPosition(
@@ -106,35 +139,83 @@ class DocumentLocalStore(context: Context) {
         paragraphIndex: Int,
         locator: ReadingLocator?,
     ) = withContext(Dispatchers.IO) {
+        markDirty(id) { db ->
+            db.execSQL(
+                """
+                UPDATE $TABLE
+                SET last_read_char_offset = ?,
+                    last_read_paragraph_index = ?,
+                    last_read_section_id = ?,
+                    last_read_block_index = ?,
+                    last_read_block_char_offset = ?
+                WHERE id = ?
+                """.trimIndent(),
+                arrayOf<Any?>(
+                    globalCharOffset,
+                    paragraphIndex,
+                    locator?.sectionId,
+                    locator?.blockIndex ?: 0,
+                    locator?.charOffset ?: 0,
+                    id,
+                ),
+            )
+        }
+    }
+
+    suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
         writeMutex.withLock {
             helper.writableDatabase.use { db ->
                 db.execSQL(
                     """
                     UPDATE $TABLE
-                    SET last_read_char_offset = ?,
-                        last_read_paragraph_index = ?,
-                        last_read_section_id = ?,
-                        last_read_block_index = ?,
-                        last_read_block_char_offset = ?
+                    SET deleted = 1,
+                        updated_at_ms = ?,
+                        sync_dirty = 1
                     WHERE id = ?
                     """.trimIndent(),
-                    arrayOf<Any?>(
-                        globalCharOffset,
-                        paragraphIndex,
-                        locator?.sectionId,
-                        locator?.blockIndex ?: 0,
-                        locator?.charOffset ?: 0,
-                        id,
-                    ),
+                    arrayOf<Any>(now, id),
                 )
+            }
+        }
+        changes.tryEmit(Unit)
+    }
+
+    suspend fun purgeDeleted(id: String) = withContext(Dispatchers.IO) {
+        writeMutex.withLock {
+            helper.writableDatabase.use { db ->
+                db.delete(TABLE, "id = ?", arrayOf(id))
+            }
+        }
+        changes.tryEmit(Unit)
+    }
+
+    suspend fun markSynced(ids: Collection<String>) = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext
+        writeMutex.withLock {
+            helper.writableDatabase.use { db ->
+                ids.forEach { id ->
+                    db.execSQL(
+                        "UPDATE $TABLE SET sync_dirty = 0 WHERE id = ?",
+                        arrayOf<Any>(id),
+                    )
+                }
             }
         }
     }
 
-    suspend fun delete(id: String) = withContext(Dispatchers.IO) {
+    private suspend fun markDirty(
+        id: String,
+        update: (SQLiteDatabase) -> Unit,
+    ) {
+        val now = System.currentTimeMillis()
         writeMutex.withLock {
             helper.writableDatabase.use { db ->
-                db.delete(TABLE, "id = ?", arrayOf(id))
+                update(db)
+                db.execSQL(
+                    "UPDATE $TABLE SET updated_at_ms = ?, sync_dirty = 1 WHERE id = ?",
+                    arrayOf<Any>(now, id),
+                )
             }
         }
         changes.tryEmit(Unit)
@@ -162,12 +243,23 @@ class DocumentLocalStore(context: Context) {
                     "ALTER TABLE $TABLE ADD COLUMN last_read_block_char_offset INTEGER NOT NULL DEFAULT 0",
                 )
             }
+            if (oldVersion < 5) {
+                db.execSQL(
+                    "ALTER TABLE $TABLE ADD COLUMN updated_at_ms INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE $TABLE ADD COLUMN sync_dirty INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE $TABLE ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0",
+                )
+            }
         }
     }
 
     companion object {
         private const val DB_NAME = "natsu_documents.db"
-        private const val DB_VERSION = 4
+        private const val DB_VERSION = 5
         private const val TABLE = "documents"
 
         private val CREATE_TABLE_SQL = """
@@ -182,7 +274,10 @@ class DocumentLocalStore(context: Context) {
                 last_read_paragraph_index INTEGER NOT NULL DEFAULT 0,
                 last_read_section_id TEXT,
                 last_read_block_index INTEGER NOT NULL DEFAULT 0,
-                last_read_block_char_offset INTEGER NOT NULL DEFAULT 0
+                last_read_block_char_offset INTEGER NOT NULL DEFAULT 0,
+                updated_at_ms INTEGER NOT NULL DEFAULT 0,
+                sync_dirty INTEGER NOT NULL DEFAULT 0,
+                deleted INTEGER NOT NULL DEFAULT 0
             )
         """.trimIndent()
 
@@ -198,6 +293,9 @@ class DocumentLocalStore(context: Context) {
             "last_read_section_id",
             "last_read_block_index",
             "last_read_block_char_offset",
+            "updated_at_ms",
+            "sync_dirty",
+            "deleted",
         )
     }
 }
@@ -223,6 +321,9 @@ private fun android.database.Cursor.toDocument(): Document {
         lastReadCharOffset = getInt(6),
         lastReadParagraphIndex = getInt(7),
         lastReadLocator = locator,
+        updatedAtMs = getLong(11),
+        syncDirty = getInt(12) == 1,
+        deleted = getInt(13) == 1,
     )
 }
 
@@ -239,4 +340,7 @@ private fun Document.toContentValues(): android.content.ContentValues =
         put("last_read_section_id", lastReadLocator?.sectionId)
         put("last_read_block_index", lastReadLocator?.blockIndex ?: 0)
         put("last_read_block_char_offset", lastReadLocator?.charOffset ?: 0)
+        put("updated_at_ms", updatedAtMs)
+        put("sync_dirty", if (syncDirty) 1 else 0)
+        put("deleted", if (deleted) 1 else 0)
     }

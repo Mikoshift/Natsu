@@ -9,6 +9,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import io.mikoshift.natsu.di.AppContainer
+import io.mikoshift.natsu.ui.auth.AuthScreen
+import io.mikoshift.natsu.ui.auth.AuthViewModel
 import io.mikoshift.natsu.ui.dictionaries.DictionariesScreen
 import io.mikoshift.natsu.ui.dictionaries.DictionariesViewModel
 import io.mikoshift.natsu.ui.library.LibraryScreen
@@ -45,6 +47,13 @@ fun NatsuNavHost(
         composable(Routes.SETTINGS) {
             val viewModel: SettingsViewModel = viewModel(factory = appContainer.viewModelFactory)
             SettingsScreen(viewModel = viewModel)
+        }
+        composable(Routes.AUTH) {
+            val viewModel: AuthViewModel = viewModel(factory = appContainer.viewModelFactory)
+            AuthScreen(
+                viewModel = viewModel,
+                onBack = { navController.popBackStack() },
+            )
         }
         composable(
             route = Routes.READER,
