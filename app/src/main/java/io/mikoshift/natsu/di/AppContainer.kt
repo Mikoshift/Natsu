@@ -142,6 +142,7 @@ class AppContainer(context: Context) {
             bookStorage = bookStorage,
             manifestReadingContentLoader = manifestReadingContentLoader,
             readingLayoutBuilder = readingLayoutBuilder,
+            syncRepository = syncRepository,
         )
     }
 

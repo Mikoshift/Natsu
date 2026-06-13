@@ -45,6 +45,9 @@ object SyncDocumentMapper {
             lastReadLocator = locator,
             updatedAtMs = dto.updated_at_ms,
             syncDirty = false,
+            packageDirty = existing?.packageDirty ?: false,
+            packageUpdatedAtMs = dto.package_updated_at_ms,
+            packageSha256 = dto.package_sha256,
             deleted = dto.deleted,
         )
     }

@@ -17,6 +17,9 @@ data class Document(
     val lastReadLocator: ReadingLocator? = null,
     val updatedAtMs: Long = 0L,
     val syncDirty: Boolean = false,
+    val packageDirty: Boolean = false,
+    val packageUpdatedAtMs: Long = 0L,
+    val packageSha256: String? = null,
     val deleted: Boolean = false,
 )
 
