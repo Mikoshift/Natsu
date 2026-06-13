@@ -25,6 +25,26 @@ class DocumentLocalStore(context: Context) {
         changes.tryEmit(Unit)
     }
 
+    suspend fun getPackageDirtyDocuments(): List<Document> = withContext(Dispatchers.IO) {
+        helper.readableDatabase.use { db ->
+            db.query(
+                TABLE,
+                DOCUMENT_COLUMNS,
+                "package_dirty = 1 AND deleted = 0",
+                null,
+                null,
+                null,
+                "updated_at_ms ASC",
+            ).use { cursor ->
+                buildList {
+                    while (cursor.moveToNext()) {
+                        add(cursor.toDocument())
+                    }
+                }
+            }
+        }
+    }
+
     suspend fun getAll(): List<Document> = withContext(Dispatchers.IO) {
         helper.readableDatabase.use { db ->
             db.query(
@@ -87,6 +107,7 @@ class DocumentLocalStore(context: Context) {
         val stored = document.copy(
             updatedAtMs = if (document.updatedAtMs > 0L) document.updatedAtMs else now,
             syncDirty = true,
+            packageDirty = true,
         )
         writeMutex.withLock {
             helper.writableDatabase.use { db ->
@@ -190,6 +211,20 @@ class DocumentLocalStore(context: Context) {
         changes.tryEmit(Unit)
     }
 
+    suspend fun markPackageSynced(ids: Collection<String>) = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext
+        writeMutex.withLock {
+            helper.writableDatabase.use { db ->
+                ids.forEach { id ->
+                    db.execSQL(
+                        "UPDATE $TABLE SET package_dirty = 0 WHERE id = ?",
+                        arrayOf<Any>(id),
+                    )
+                }
+            }
+        }
+    }
+
     suspend fun markSynced(ids: Collection<String>) = withContext(Dispatchers.IO) {
         if (ids.isEmpty()) return@withContext
         writeMutex.withLock {
@@ -254,12 +289,26 @@ class DocumentLocalStore(context: Context) {
                     "ALTER TABLE $TABLE ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0",
                 )
             }
+            if (oldVersion < 6) {
+                db.execSQL(
+                    "ALTER TABLE $TABLE ADD COLUMN package_dirty INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE $TABLE ADD COLUMN package_updated_at_ms INTEGER NOT NULL DEFAULT 0",
+                )
+                db.execSQL(
+                    "ALTER TABLE $TABLE ADD COLUMN package_sha256 TEXT",
+                )
+                db.execSQL(
+                    "UPDATE $TABLE SET package_dirty = 1 WHERE deleted = 0",
+                )
+            }
         }
     }
 
     companion object {
         private const val DB_NAME = "natsu_documents.db"
-        private const val DB_VERSION = 5
+        private const val DB_VERSION = 6
         private const val TABLE = "documents"
 
         private val CREATE_TABLE_SQL = """
@@ -277,6 +326,9 @@ class DocumentLocalStore(context: Context) {
                 last_read_block_char_offset INTEGER NOT NULL DEFAULT 0,
                 updated_at_ms INTEGER NOT NULL DEFAULT 0,
                 sync_dirty INTEGER NOT NULL DEFAULT 0,
+                package_dirty INTEGER NOT NULL DEFAULT 0,
+                package_updated_at_ms INTEGER NOT NULL DEFAULT 0,
+                package_sha256 TEXT,
                 deleted INTEGER NOT NULL DEFAULT 0
             )
         """.trimIndent()
@@ -295,6 +347,9 @@ class DocumentLocalStore(context: Context) {
             "last_read_block_char_offset",
             "updated_at_ms",
             "sync_dirty",
+            "package_dirty",
+            "package_updated_at_ms",
+            "package_sha256",
             "deleted",
         )
     }
@@ -323,7 +378,10 @@ private fun android.database.Cursor.toDocument(): Document {
         lastReadLocator = locator,
         updatedAtMs = getLong(11),
         syncDirty = getInt(12) == 1,
-        deleted = getInt(13) == 1,
+        packageDirty = getInt(13) == 1,
+        packageUpdatedAtMs = getLong(14),
+        packageSha256 = getString(15),
+        deleted = getInt(16) == 1,
     )
 }
 
@@ -342,5 +400,8 @@ private fun Document.toContentValues(): android.content.ContentValues =
         put("last_read_block_char_offset", lastReadLocator?.charOffset ?: 0)
         put("updated_at_ms", updatedAtMs)
         put("sync_dirty", if (syncDirty) 1 else 0)
+        put("package_dirty", if (packageDirty) 1 else 0)
+        put("package_updated_at_ms", packageUpdatedAtMs)
+        put("package_sha256", packageSha256)
         put("deleted", if (deleted) 1 else 0)
     }

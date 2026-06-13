@@ -3,8 +3,10 @@ package io.mikoshift.natsu.data.remote
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import io.mikoshift.natsu.data.remote.dto.AuthResponseDto
+import io.mikoshift.natsu.data.remote.dto.DocumentPackageResponseDto
 import io.mikoshift.natsu.data.remote.dto.DocumentsResponseDto
 import io.mikoshift.natsu.data.remote.dto.MessageResponseDto
+import io.mikoshift.natsu.data.remote.dto.PackageHeadDto
 import io.mikoshift.natsu.data.remote.dto.ReaderSettingsResponseDto
 import io.mikoshift.natsu.data.remote.dto.SyncDocumentsRequestDto
 import io.mikoshift.natsu.data.remote.dto.UpdateReaderSettingsRequestDto
@@ -13,9 +15,12 @@ import io.mikoshift.natsu.data.remote.dto.UserEnvelopeDto
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import java.io.File
 
 class NatsuApiClient(
     private val baseUrl: String,
@@ -97,6 +102,74 @@ class NatsuApiClient(
         body = request,
         responseType = ReaderSettingsResponseDto::class.java,
     )
+
+    suspend fun uploadPackage(documentId: String, zipFile: File): DocumentPackageResponseDto =
+        withContext(Dispatchers.IO) {
+            val body = MultipartBody.Builder()
+                .setType(MultipartBody.FORM)
+                .addFormDataPart(
+                    "package",
+                    zipFile.name,
+                    zipFile.asRequestBody("application/zip".toMediaType()),
+                )
+                .build()
+            val responseBody = executeRequest(
+                Request.Builder()
+                    .url(url("documents/$documentId/package"))
+                    .put(body)
+                    .header("Accept", "application/json")
+                    .build(),
+            )
+            gson.fromJson(responseBody, DocumentPackageResponseDto::class.java)
+        }
+
+    suspend fun downloadPackage(documentId: String, destination: File) = withContext(Dispatchers.IO) {
+        client.newCall(
+            Request.Builder()
+                .url(url("documents/$documentId/package"))
+                .get()
+                .build(),
+        ).execute().use { response ->
+            if (response.code != 200) {
+                val body = response.body?.string().orEmpty()
+                throw ApiException(
+                    code = response.code,
+                    message = extractErrorMessage(body, response.code),
+                    errorBody = body,
+                )
+            }
+            val body = response.body ?: throw ApiException(
+                code = response.code,
+                message = "Empty package response body",
+            )
+            destination.outputStream().use { output ->
+                body.byteStream().use { input ->
+                    input.copyTo(output)
+                }
+            }
+        }
+    }
+
+    suspend fun headPackage(documentId: String): PackageHeadDto = withContext(Dispatchers.IO) {
+        client.newCall(
+            Request.Builder()
+                .url(url("documents/$documentId/package"))
+                .head()
+                .build(),
+        ).execute().use { response ->
+            if (response.code != 200) {
+                throw ApiException(
+                    code = response.code,
+                    message = "Package head failed with HTTP ${response.code}",
+                )
+            }
+            PackageHeadDto(
+                contentLength = response.header("Content-Length")?.toLongOrNull() ?: 0L,
+                sha256 = response.header("X-Package-Sha256"),
+                updatedAtMs = response.header("X-Package-Updated-At-Ms")?.toLongOrNull() ?: 0L,
+            )
+        }
+    }
 
     private suspend fun <T> getJson(
         path: String,

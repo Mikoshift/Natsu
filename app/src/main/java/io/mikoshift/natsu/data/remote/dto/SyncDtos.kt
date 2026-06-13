@@ -13,6 +13,10 @@ data class DocumentDto(
     val last_read_block_char_offset: Int,
     val updated_at_ms: Long,
     val deleted: Boolean,
+    val has_package: Boolean = false,
+    val package_size_bytes: Long = 0,
+    val package_updated_at_ms: Long = 0,
+    val package_sha256: String? = null,
 )
 
 data class DocumentsResponseDto(
@@ -22,6 +26,17 @@ data class DocumentsResponseDto(
 
 data class SyncDocumentsRequestDto(
     val documents: List<DocumentDto>,
+)
+
+data class DocumentPackageResponseDto(
+    val document: DocumentDto,
+    val server_time_ms: Long,
+)
+
+data class PackageHeadDto(
+    val contentLength: Long,
+    val sha256: String?,
+    val updatedAtMs: Long,
 )
 
 data class ReaderSettingsDto(

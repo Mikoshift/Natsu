@@ -9,6 +9,7 @@ import io.mikoshift.natsu.data.reader.SearchIndexBuilder
 import io.mikoshift.natsu.domain.model.Document
 import io.mikoshift.natsu.domain.model.reading.ReadingLocator
 import io.mikoshift.natsu.domain.repository.DocumentRepository
+import io.mikoshift.natsu.domain.repository.SyncRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -20,6 +21,7 @@ class DocumentRepositoryImpl(
     private val bookStorage: BookStorage,
     private val manifestReadingContentLoader: ManifestReadingContentLoader,
     private val readingLayoutBuilder: ReadingLayoutBuilder,
+    private val syncRepository: SyncRepository,
     private val searchIndexBuilder: SearchIndexBuilder = SearchIndexBuilder(),
 ) : DocumentRepository {
 
@@ -61,6 +63,7 @@ class DocumentRepositoryImpl(
                 lastReadLocator = null,
             )
             documentLocalStore.insert(document)
+            syncRepository.scheduleSync(delaySeconds = 5)
             document
         }
 
