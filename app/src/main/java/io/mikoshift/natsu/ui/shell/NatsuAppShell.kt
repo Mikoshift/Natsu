@@ -13,9 +13,11 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import io.mikoshift.natsu.di.AppContainer
+import io.mikoshift.natsu.domain.model.AuthState
 import io.mikoshift.natsu.ui.drawer.NatsuDrawerContent
 import io.mikoshift.natsu.ui.navigation.NatsuNavHost
 import io.mikoshift.natsu.ui.navigation.Routes
@@ -33,6 +35,9 @@ fun NatsuAppShell(
     val currentRoute = navBackStackEntry?.destination?.route
     val showDrawer = currentRoute?.startsWith("reader") != true
     val drawerWidth = (LocalConfiguration.current.screenWidthDp * 0.67f).dp
+    val authState by appContainer.authRepository.authState.collectAsStateWithLifecycle(
+        initialValue = AuthState.Guest,
+    )
 
     val openDrawer: () -> Unit = {
         scope.launch { drawerState.open() }
@@ -40,6 +45,13 @@ fun NatsuAppShell(
 
     val closeDrawer: () -> Unit = {
         scope.launch { drawerState.close() }
+    }
+
+    val navigateToAuth: () -> Unit = {
+        closeDrawer()
+        navController.navigate(Routes.AUTH) {
+            launchSingleTop = true
+        }
     }
 
     CompositionLocalProvider(LocalDrawerOpen provides openDrawer) {
@@ -53,6 +65,7 @@ fun NatsuAppShell(
                             .fillMaxHeight(),
                     ) {
                         NatsuDrawerContent(
+                            authState = authState,
                             selectedRoute = currentRoute,
                             onNavigateToLibrary = {
                                 closeDrawer()
@@ -75,6 +88,18 @@ fun NatsuAppShell(
                                 if (currentRoute != Routes.SETTINGS) {
                                     navController.navigate(Routes.SETTINGS) {
                                         launchSingleTop = true
+                                    }
+                                }
+                            },
+                            onAccountClick = {
+                                if (authState is AuthState.Guest) {
+                                    navigateToAuth()
+                                } else {
+                                    closeDrawer()
+                                    if (currentRoute != Routes.SETTINGS) {
+                                        navController.navigate(Routes.SETTINGS) {
+                                            launchSingleTop = true
+                                        }
                                     }
                                 }
                             },

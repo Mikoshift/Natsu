@@ -1,0 +1,19 @@
+## Copy to local.properties and adjust for your machine.
+## local.properties is gitignored — never commit secrets or personal paths.
+
+# Android SDK (Android Studio usually generates this automatically)
+sdk.dir=/Users/YOU/Library/Android/sdk
+
+# JDK for Gradle (Android Studio JBR recommended on macOS)
+java.home=/Applications/Android Studio.app/Contents/jbr/Contents/Home
+
+# --- Natsu API (debug) ---
+# Option A: set host + port (default for emulator + adb reverse)
+api.host=127.0.0.1
+api.port=8000
+
+# Option B: override full debug URL (e.g. physical device on Wi‑Fi)
+# api.base.url=http://192.168.1.42:8000/api/v1/
+
+# --- Natsu API (release) — override for staging/prod builds ---
+# api.base.url.release=https://api.natsu.example.com/api/v1/

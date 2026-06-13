@@ -1,6 +1,7 @@
 package io.mikoshift.natsu.ui.drawer
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -27,13 +28,20 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import io.mikoshift.natsu.R
-import io.mikoshift.natsu.domain.model.UserProfileStub
+import io.mikoshift.natsu.domain.model.AuthState
 import io.mikoshift.natsu.ui.navigation.Routes
 
 @Composable
 fun NatsuDrawerHeader(
+    authState: AuthState,
+    onAccountClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val displayName = when (authState) {
+        AuthState.Guest -> stringResource(R.string.account_guest)
+        is AuthState.Authenticated -> authState.user.name
+    }
+
     Column(modifier = modifier.fillMaxWidth()) {
         Box(
             modifier = Modifier
@@ -59,11 +67,12 @@ fun NatsuDrawerHeader(
                     .size(64.dp)
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surface)
+                    .clickable(onClick = onAccountClick)
                     .align(Alignment.CenterStart),
                 contentAlignment = Alignment.Center,
             ) {
                 Text(
-                    text = UserProfileStub.DISPLAY_NAME.first().toString(),
+                    text = displayName.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
                     style = MaterialTheme.typography.headlineSmall,
                     color = MaterialTheme.colorScheme.primary,
                 )
@@ -71,20 +80,34 @@ fun NatsuDrawerHeader(
         }
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = UserProfileStub.DISPLAY_NAME,
+            text = displayName,
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier
+                .padding(horizontal = 16.dp)
+                .clickable(onClick = onAccountClick),
         )
+        if (authState is AuthState.Guest) {
+            Text(
+                text = stringResource(R.string.account_sign_in_prompt),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .clickable(onClick = onAccountClick),
+            )
+        }
         Spacer(modifier = Modifier.height(8.dp))
     }
 }
 
 @Composable
 fun NatsuDrawerContent(
+    authState: AuthState,
     selectedRoute: String?,
     onNavigateToLibrary: () -> Unit,
     onNavigateToDictionaries: () -> Unit,
     onNavigateToSettings: () -> Unit,
+    onAccountClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -92,7 +115,10 @@ fun NatsuDrawerContent(
             .fillMaxHeight()
             .fillMaxWidth(),
     ) {
-        NatsuDrawerHeader()
+        NatsuDrawerHeader(
+            authState = authState,
+            onAccountClick = onAccountClick,
+        )
         NavigationDrawerItem(
             label = { Text(stringResource(R.string.drawer_library)) },
             selected = selectedRoute == Routes.LIBRARY,

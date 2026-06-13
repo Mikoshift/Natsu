@@ -22,6 +22,7 @@ import io.mikoshift.natsu.domain.model.reading.SectionReadingContent
 import io.mikoshift.natsu.domain.repository.DictionaryRepository
 import io.mikoshift.natsu.domain.repository.DocumentRepository
 import io.mikoshift.natsu.domain.repository.ReadingContentRepository
+import io.mikoshift.natsu.domain.repository.SyncRepository
 import io.mikoshift.natsu.domain.repository.TextTokenizer
 import io.mikoshift.natsu.data.settings.ReaderSettingsStore
 import io.mikoshift.natsu.ui.reader.web.ReaderSectionTokenCache
@@ -80,6 +81,7 @@ class ReaderViewModel(
     private val dictionaryRepository: DictionaryRepository,
     private val textTokenizer: TextTokenizer,
     readerSettingsStore: ReaderSettingsStore,
+    private val syncRepository: SyncRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ReaderUiState())
@@ -638,6 +640,7 @@ class ReaderViewModel(
             if (notifyLibrary) {
                 documentRepository.notifyDocumentsChanged()
             }
+            syncRepository.scheduleSync(delaySeconds = 5)
         }
     }
 
