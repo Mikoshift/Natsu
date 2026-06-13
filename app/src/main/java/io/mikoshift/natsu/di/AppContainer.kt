@@ -15,6 +15,7 @@ import io.mikoshift.natsu.data.book.import.EpubBookImporter
 import io.mikoshift.natsu.data.book.import.MarkdownBookImporter
 import io.mikoshift.natsu.data.book.import.PlainTextBookImporter
 import io.mikoshift.natsu.data.book.load.EpubFormatLoader
+import io.mikoshift.natsu.data.book.load.HtmlFormatLoader
 import io.mikoshift.natsu.data.book.load.ManifestReadingContentLoader
 import io.mikoshift.natsu.data.book.load.MarkdownFormatLoader
 import io.mikoshift.natsu.data.book.load.PlainTextFormatLoader
@@ -120,6 +121,7 @@ class AppContainer(context: Context) {
         ManifestReadingContentLoader(
             bookStorage = bookStorage,
             formatLoaders = listOf(
+                HtmlFormatLoader(),
                 PlainTextFormatLoader(),
                 MarkdownFormatLoader(),
                 EpubFormatLoader(),

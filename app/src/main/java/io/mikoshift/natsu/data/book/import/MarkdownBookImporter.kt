@@ -37,7 +37,7 @@ class MarkdownBookImporter(
                     bookDir = bookDir,
                     manifest = BookManifest(
                         version = BookStorage.MANIFEST_VERSION_HTML,
-                        format = BookFormat.Markdown,
+                        format = BookFormat.Html,
                         title = title,
                         sections = listOf(
                             ManifestSection(
