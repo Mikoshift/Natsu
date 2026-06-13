@@ -190,6 +190,17 @@ class DocumentLocalStore(context: Context) {
         changes.tryEmit(Unit)
     }
 
+    suspend fun updatePackageSha256(id: String, sha256: String) = withContext(Dispatchers.IO) {
+        writeMutex.withLock {
+            helper.writableDatabase.use { db ->
+                db.execSQL(
+                    "UPDATE $TABLE SET package_sha256 = ? WHERE id = ?",
+                    arrayOf<Any>(sha256, id),
+                )
+            }
+        }
+    }
+
     suspend fun markSynced(ids: Collection<String>) = withContext(Dispatchers.IO) {
         if (ids.isEmpty()) return@withContext
         writeMutex.withLock {
@@ -254,12 +265,15 @@ class DocumentLocalStore(context: Context) {
                     "ALTER TABLE $TABLE ADD COLUMN deleted INTEGER NOT NULL DEFAULT 0",
                 )
             }
+            if (oldVersion < 6) {
+                db.execSQL("ALTER TABLE $TABLE ADD COLUMN package_sha256 TEXT")
+            }
         }
     }
 
     companion object {
         private const val DB_NAME = "natsu_documents.db"
-        private const val DB_VERSION = 5
+        private const val DB_VERSION = 6
         private const val TABLE = "documents"
 
         private val CREATE_TABLE_SQL = """
@@ -277,7 +291,8 @@ class DocumentLocalStore(context: Context) {
                 last_read_block_char_offset INTEGER NOT NULL DEFAULT 0,
                 updated_at_ms INTEGER NOT NULL DEFAULT 0,
                 sync_dirty INTEGER NOT NULL DEFAULT 0,
-                deleted INTEGER NOT NULL DEFAULT 0
+                deleted INTEGER NOT NULL DEFAULT 0,
+                package_sha256 TEXT
             )
         """.trimIndent()
 
@@ -296,6 +311,7 @@ class DocumentLocalStore(context: Context) {
             "updated_at_ms",
             "sync_dirty",
             "deleted",
+            "package_sha256",
         )
     }
 }
@@ -324,6 +340,7 @@ private fun android.database.Cursor.toDocument(): Document {
         updatedAtMs = getLong(11),
         syncDirty = getInt(12) == 1,
         deleted = getInt(13) == 1,
+        packageSha256 = getString(14),
     )
 }
 
@@ -343,4 +360,5 @@ private fun Document.toContentValues(): android.content.ContentValues =
         put("updated_at_ms", updatedAtMs)
         put("sync_dirty", if (syncDirty) 1 else 0)
         put("deleted", if (deleted) 1 else 0)
+        put("package_sha256", packageSha256)
     }

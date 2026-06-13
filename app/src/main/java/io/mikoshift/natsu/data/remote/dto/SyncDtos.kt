@@ -13,6 +13,9 @@ data class DocumentDto(
     val last_read_block_char_offset: Int,
     val updated_at_ms: Long,
     val deleted: Boolean,
+    val has_package: Boolean = false,
+    val package_sha256: String? = null,
+    val package_updated_at_ms: Long = 0,
 )
 
 data class DocumentsResponseDto(

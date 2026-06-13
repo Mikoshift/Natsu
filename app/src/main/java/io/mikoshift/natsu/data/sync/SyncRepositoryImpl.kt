@@ -90,14 +90,21 @@ class SyncRepositoryImpl(
             }
 
             val merged = SyncDocumentMapper.toLocal(remote, local)
-            if (local == null) {
-                documentLocalStore.upsertFromSync(
-                    merged.copy(storagePath = merged.id),
-                )
-            } else {
-                documentLocalStore.upsertFromSync(
-                    merged.copy(storagePath = local.storagePath),
-                )
+            val storagePath = local?.storagePath ?: merged.id
+            documentLocalStore.upsertFromSync(merged.copy(storagePath = storagePath))
+
+            if (remote.has_package && remote.package_sha256 != null) {
+                val bookDir = bookStorage.bookDirectory(storagePath)
+                val needsDownload = !bookDir.exists() || local?.packageSha256 != remote.package_sha256
+                if (needsDownload) {
+                    runCatching {
+                        val zipBytes = apiClient.downloadPackage(remote.id)
+                        bookDir.deleteRecursively()
+                        bookDir.mkdirs()
+                        bookStorage.unzipSyncPackage(bookDir, zipBytes)
+                        documentLocalStore.updatePackageSha256(remote.id, remote.package_sha256)
+                    }
+                }
             }
         }
 

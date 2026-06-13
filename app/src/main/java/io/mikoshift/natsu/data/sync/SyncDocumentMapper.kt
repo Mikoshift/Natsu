@@ -46,6 +46,7 @@ object SyncDocumentMapper {
             updatedAtMs = dto.updated_at_ms,
             syncDirty = false,
             deleted = dto.deleted,
+            packageSha256 = existing?.packageSha256,
         )
     }
 

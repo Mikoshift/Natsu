@@ -18,6 +18,7 @@ data class Document(
     val updatedAtMs: Long = 0L,
     val syncDirty: Boolean = false,
     val deleted: Boolean = false,
+    val packageSha256: String? = null,
 )
 
 fun Document.hasReadingProgress(): Boolean =

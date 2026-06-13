@@ -98,6 +98,27 @@ class NatsuApiClient(
         responseType = ReaderSettingsResponseDto::class.java,
     )
 
+    suspend fun downloadPackage(documentId: String): ByteArray = withContext(Dispatchers.IO) {
+        client.newCall(
+            Request.Builder()
+                .url(url("documents/$documentId/package"))
+                .get()
+                .header("Accept", "application/zip")
+                .build(),
+        ).execute().use { response ->
+            if (response.code != 200) {
+                throw ApiException(
+                    code = response.code,
+                    message = "Package download failed with HTTP ${response.code}",
+                )
+            }
+            response.body?.bytes() ?: throw ApiException(
+                code = response.code,
+                message = "Empty package response body",
+            )
+        }
+    }
+
     private suspend fun <T> getJson(
         path: String,
         responseType: Class<T>,

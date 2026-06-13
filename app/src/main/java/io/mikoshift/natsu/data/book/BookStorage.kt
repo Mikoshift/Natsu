@@ -115,6 +115,29 @@ class BookStorage private constructor(
         return gson.fromJson(json, SearchIndexJson::class.java)?.toDomain()
     }
 
+    fun unzipSyncPackage(bookDir: File, zipBytes: ByteArray) {
+        var totalUnzipped = 0
+        ZipInputStream(ByteArrayInputStream(zipBytes)).use { zipInput ->
+            var entry = zipInput.nextEntry
+            while (entry != null) {
+                if (!entry.isDirectory) {
+                    val relativePath = entry.name.replace('\\', '/').removePrefix("/")
+                    require(relativePath.isNotBlank()) { "Invalid zip entry name: ${entry.name}" }
+                    val targetFile = BookPathResolver.resolveRelativePath(bookDir, relativePath)
+                    val bytes = zipInput.readBytes()
+                    totalUnzipped += bytes.size
+                    require(totalUnzipped <= MAX_CONTENT_BYTES) {
+                        "Package exceeds maximum size of $MAX_CONTENT_BYTES bytes"
+                    }
+                    targetFile.parentFile?.mkdirs()
+                    targetFile.writeBytes(bytes)
+                }
+                zipInput.closeEntry()
+                entry = zipInput.nextEntry
+            }
+        }
+    }
+
     fun deleteBookPackage(storagePath: String) {
         val bookDir = BookPathResolver.requireUnderBooksRoot(booksRoot, storagePath)
         bookDir.deleteRecursively()
