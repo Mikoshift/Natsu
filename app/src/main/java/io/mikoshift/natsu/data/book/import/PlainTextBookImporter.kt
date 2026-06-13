@@ -40,7 +40,7 @@ class PlainTextBookImporter(
                     bookDir = bookDir,
                     manifest = BookManifest(
                         version = BookStorage.MANIFEST_VERSION_HTML,
-                        format = BookFormat.PlainText,
+                        format = BookFormat.Html,
                         title = title,
                         sections = listOf(
                             ManifestSection(
